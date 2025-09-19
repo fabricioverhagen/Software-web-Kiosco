@@ -131,6 +131,16 @@
                         </div>
                     </div>
 
+                    <!-- Filtros: nombre y fecha -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <input id="productos_filter_name" class="form-control" type="text" placeholder="Buscar por nombre...">
+                        </div>
+                        <div class="col-md-3">
+                            <input id="productos_filter_date" class="form-control" type="date" placeholder="Fecha (si aplica)">
+                        </div>
+                    </div>
+
                     <!-- Tabla de Productos -->
                     <div class="row">
                         <div class="col-12">
@@ -146,44 +156,49 @@
                                     <div class="table-responsive">
                                         <table class="table table-bordered table-striped">
                                             <thead>
-                                                <tr>
-                                                    <th>ID</th>
-                                                    <th>Descripción</th>
-                                                    <th>Precio</th>
-                                                    <th>Stock</th>
-                                                    <th>Estado Stock</th>
-                                                    <th>Acciones</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {% for producto in productos %}
-                                                <tr>
-                                                    <td>{{ producto.id_producto }}</td>
-                                                    <td>{{ producto.descripcion }}</td>
-                                                    <td>${{ "%.2f"|format(producto.precio) }}</td>
-                                                    <td>{{ producto.stock }}</td>
-                                                    <td>
-                                                        {% if producto.stock == 0 %}
-                                                            <span class="badge badge-danger">Sin Stock</span>
-                                                        {% elif producto.stock <= 5 %}
-                                                            <span class="badge badge-warning">Stock Bajo</span>
-                                                        {% else %}
-                                                            <span class="badge badge-success">Disponible</span>
-                                                        {% endif %}
-                                                    </td>
-                                                    <td>
-                                                        <button class="btn btn-sm btn-info" onclick="editarProducto('{{ producto.id_producto }}', '{{ producto.descripcion }}', '{{ producto.precio }}', '{{ producto.stock }}')">
-                                                            <i class="fas fa-edit"></i> Editar
-                                                        </button>
-                                                        <form method="POST" action="{{ url_for('eliminar_producto', id=producto.id_producto) }}" style="display: inline;">
-                                                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('¿Estás seguro de eliminar este producto?')">
-                                                                <i class="fas fa-trash"></i> Eliminar
-                                                            </button>
-                                                        </form>
-                                                    </td>
-                                                </tr>
-                                                {% endfor %}
-                                            </tbody>
+    <tr>
+        <th>ID</th>
+        <th>Descripción</th>
+        <th>Precio Costo</th>
+        <th>Margen (%)</th>
+        <th>Precio</th>
+        <th>Stock</th>
+        <th>Estado Stock</th>
+        <th>Acciones</th>
+    </tr>
+</thead>
+<tbody>
+    {% for producto in productos %}
+    <tr>
+        <td>{{ producto.id_producto }}</td>
+        <td>{{ producto.descripcion }}</td>
+        <td>${{ "%.2f"|format(producto.precio_costo if producto.precio_costo else 0) }}</td>
+        <td>{{ "%.2f"|format(producto.margen_ganancia if producto.margen_ganancia else 0) }}%</td>
+        <td>${{ "%.2f"|format(producto.precio) }}</td>
+        <td>{{ producto.stock }}</td>
+        <td>
+            {% if producto.stock == 0 %}
+                <span class="badge badge-danger">Sin Stock</span>
+            {% elif producto.stock <= 5 %}
+                <span class="badge badge-warning">Stock Bajo</span>
+            {% else %}
+                <span class="badge badge-success">Disponible</span>
+            {% endif %}
+        </td>
+        <td>
+            <button class="btn btn-sm btn-info" 
+                onclick='editarProducto({{ producto.id_producto|tojson }}, {{ producto.descripcion|tojson }}, {{ producto.precio|tojson }}, {{ producto.stock|tojson }}, {{ producto.precio_costo|tojson }}, {{ producto.margen_ganancia|tojson }})'>
+                <i class="fas fa-edit"></i> Editar
+            </button>
+            <form method="POST" action="{{ url_for('eliminar_producto', id=producto.id_producto) }}" style="display: inline;">
+                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('¿Estás seguro de eliminar este producto?')">
+                    <i class="fas fa-trash"></i> Eliminar
+                </button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+</tbody>
                                         </table>
                                     </div>
                                     {% else %}
@@ -212,22 +227,39 @@
                         <span>&times;</span>
                     </button>
                 </div>
-                <form id="formProducto" method="POST" action="{{ url_for('agregar_producto') }}">
+                <form id="formProducto" method="POST" action="{{ url_for('agregar_producto') }}" data-add-url="{{ url_for('agregar_producto') }}">
                     <div class="modal-body">
-                        <input type="hidden" id="producto_id" name="producto_id">
-                        <div class="form-group">
-                            <label for="descripcion">Descripción *</label>
-                            <input type="text" class="form-control" id="descripcion" name="descripcion" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="precio">Precio *</label>
-                            <input type="number" class="form-control" id="precio" name="precio" step="0.01" min="0" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="stock">Stock *</label>
-                            <input type="number" class="form-control" id="stock" name="stock" min="0" required>
-                        </div>
-                    </div>
+    <input type="hidden" id="producto_id" name="producto_id">
+
+    <div class="form-group">
+        <label for="descripcion">Descripción *</label>
+        <input type="text" class="form-control" id="descripcion" name="descripcion" required>
+    </div>
+
+    <div class="form-group">
+        <label for="precio_costo">Precio Costo</label>
+        <input type="number" class="form-control" id="precio_costo" name="precio_costo" step="0.01" min="0">
+    </div>
+
+    <div class="form-group">
+        <label for="margen_ganancia">Margen de Ganancia (%)</label>
+        <input type="number" class="form-control" id="margen_ganancia" name="margen_ganancia" step="0.01" min="0">
+    </div>
+
+    <div class="form-group">
+        <label for="precio">Precio *</label>
+        <input type="number" class="form-control" id="precio" name="precio" step="0.01" min="0" required>
+        <small class="form-text text-muted">
+            Si ingresas Precio Costo y Margen, el Precio se calculará automáticamente.
+        </small>
+    </div>
+
+    <div class="form-group">
+        <label for="stock">Stock *</label>
+        <input type="number" class="form-control" id="stock" name="stock" min="0" required>
+    </div>
+</div>
+
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
                         <button type="submit" class="btn btn-success" id="btnSubmit">
@@ -240,10 +272,25 @@
     </div>
 
     <!-- Scripts -->
+     <script>
+    function calcularPrecio() {
+        const costo = parseFloat(document.getElementById("precio_costo").value) || 0;
+        const margen = parseFloat(document.getElementById("margen_ganancia").value) || 0;
+
+        if (costo > 0 && margen > 0) {
+            const precioCalculado = (costo * (1 + margen / 100)).toFixed(2);
+            document.getElementById("precio").value = precioCalculado;
+        }
+    }
+
+    document.getElementById("precio_costo").addEventListener("input", calcularPrecio);
+    document.getElementById("margen_ganancia").addEventListener("input", calcularPrecio);
+</script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.2/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
-    <script src="{{ url_for('static', filename='productos.js') }}"></script>
+    <script src="{{ url_for('static', filename='gestion_productos.js') }}"></script>
+    <script src="{{ url_for('static', filename='tabla_filtros.js') }}"></script>
     <script src="{{ url_for('static', filename='theme-global.js') }}"></script>
 </body>
 </html>

@@ -5,14 +5,12 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/css/adminlte.min.css">
-
     <script>
     (function() {
         const savedTheme = localStorage.getItem('theme') || 'light';
-        let actualTheme = savedTheme === 'auto' ? 
-            (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : 
+        let actualTheme = savedTheme === 'auto' ?
+            (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') :
             savedTheme;
-        
         document.documentElement.setAttribute('data-theme', actualTheme);
         if (document.body) {
             document.body.classList.add(actualTheme + '-mode');
@@ -34,7 +32,6 @@
                     <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
                 </li>
             </ul>
-            
             <ul class="navbar-nav ml-auto">
                 <li class="nav-item dropdown">
                     <a class="nav-link" data-toggle="dropdown" href="#">
@@ -54,7 +51,6 @@
                 <i class="fas fa-store brand-image img-circle elevation-3"></i>
                 <span class="brand-text font-weight-light">Mi Kiosco</span>
             </a>
-
             <div class="sidebar">
                 <nav class="mt-2">
                     <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
@@ -137,6 +133,16 @@
                             </div>
                         </div>
                         <div class="card-body p-0">
+                            <div class="p-3">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <input id="facturas_filter_name" class="form-control" type="text" placeholder="Buscar por cliente...">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <input id="facturas_filter_date" class="form-control" type="date">
+                                    </div>
+                                </div>
+                            </div>
                             {% if facturas %}
                             <div class="table-responsive">
                                 <table class="table table-bordered table-striped table-hover m-0">
@@ -146,6 +152,7 @@
                                             <th>Fecha</th>
                                             <th>Cliente</th>
                                             <th>Total</th>
+                                            <th>Ganancia</th>
                                             <th>Acciones</th>
                                         </tr>
                                     </thead>
@@ -156,6 +163,7 @@
                                             <td>{{ f.fecha }}</td>
                                             <td>{{ f.cliente if f.cliente else 'Venta rápida' }}</td>
                                             <td>${{ "%.2f"|format(f.total) }}</td>
+                                            <td>${{ "%.2f"|format(f.ganancia if f.ganancia else 0) }}</td>
                                             <td>
                                                 <a href="{{ url_for('detalle_factura', id=f.id_factura) }}" class="btn btn-sm btn-info">
                                                     <i class="fas fa-eye"></i> Ver detalle
@@ -183,6 +191,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.2/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
+    <script src="{{ url_for('static', filename='tabla_filtros.js') }}"></script>
     <script src="{{ url_for('static', filename='theme-global.js') }}"></script>
 </body>
 </html>

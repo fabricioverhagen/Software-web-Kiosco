@@ -287,10 +287,20 @@ def ventas():
 @app.route('/dashboard/listado_facturas', methods=['GET'])
 def listado_facturas():
     conn = get_db_connection()
-    facturas = conn.execute("""SELECT f.id_factura, f.fecha, f.total, c.nombre as cliente
-                               FROM facturas f
-                               LEFT JOIN clientes c ON f.id_cliente = c.id_cliente
-                               ORDER BY f.fecha DESC""").fetchall()
+    # Calculamos la ganancia por factura: sum(cantidad * (precio_unitario - precio_costo))
+    facturas = conn.execute("""
+        SELECT f.id_factura,
+               f.fecha,
+               f.total,
+               c.nombre as cliente,
+               IFNULL(SUM(d.cantidad * (d.precio_unitario - p.precio_costo)), 0) as ganancia
+        FROM facturas f
+        LEFT JOIN clientes c ON f.id_cliente = c.id_cliente
+        LEFT JOIN detalle_factura d ON d.id_factura = f.id_factura
+        LEFT JOIN productos p ON d.id_producto = p.id_producto
+        GROUP BY f.id_factura
+        ORDER BY f.fecha DESC
+    """).fetchall()
     conn.close()
     return render_template('listado_facturas.html', facturas=facturas)
 
@@ -331,13 +341,26 @@ def agregar_producto():
         return redirect(url_for("login"))
     
     descripcion = request.form['descripcion']
-    precio = float(request.form['precio'])
     stock = int(request.form['stock'])
+
+    # Campos que pueden o no estar
+    precio = request.form.get('precio')
+    precio_costo = request.form.get('precio_costo')
+    margen_ganancia = request.form.get('margen_ganancia')
+
+    # Normalizar valores numéricos
+    precio = float(precio) if precio else None
+    precio_costo = float(precio_costo) if precio_costo else None
+    margen_ganancia = float(margen_ganancia) if margen_ganancia else None
+
+    # Lógica de cálculo automático
+    if precio_costo is not None and margen_ganancia is not None:
+        precio = round(precio_costo * (1 + (margen_ganancia / 100)), 2)
 
     conn = get_db_connection()
     try:
-        conn.execute('INSERT INTO productos (descripcion, precio, stock) VALUES (?, ?, ?)',
-                     (descripcion, precio, stock))
+        conn.execute('INSERT INTO productos (descripcion, precio, stock, precio_costo, margen_ganancia) VALUES (?, ?, ?, ?, ?)',
+                     (descripcion, precio, stock, precio_costo, margen_ganancia))
         conn.commit()
         flash('Producto agregado exitosamente', 'success')
     except Exception as e:
@@ -354,13 +377,24 @@ def editar_producto(id):
         return redirect(url_for("login"))
     
     descripcion = request.form['descripcion']
-    precio = float(request.form['precio'])
     stock = int(request.form['stock'])
+
+    precio = request.form.get('precio')
+    precio_costo = request.form.get('precio_costo')
+    margen_ganancia = request.form.get('margen_ganancia')
+
+    precio = float(precio) if precio else None
+    precio_costo = float(precio_costo) if precio_costo else None
+    margen_ganancia = float(margen_ganancia) if margen_ganancia else None
+
+    # Si tiene costo + margen, recalculamos precio
+    if precio_costo is not None and margen_ganancia is not None:
+        precio = round(precio_costo * (1 + (margen_ganancia / 100)), 2)
 
     conn = get_db_connection()
     try:
-        conn.execute('UPDATE productos SET descripcion = ?, precio = ?, stock = ? WHERE id_producto = ?',
-                     (descripcion, precio, stock, id))
+        conn.execute('UPDATE productos SET descripcion = ?, precio = ?, stock = ?, precio_costo = ?, margen_ganancia = ? WHERE id_producto = ?',
+                     (descripcion, precio, stock, precio_costo, margen_ganancia, id))
         conn.commit()
         flash('Producto actualizado exitosamente', 'success')
     except Exception as e:

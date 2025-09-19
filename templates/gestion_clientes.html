@@ -107,6 +107,16 @@
                                 </button>
                         </div>
                     </div>
+
+                    <!-- Filtros: nombre y fecha -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <input id="clientes_filter_name" class="form-control" type="text" placeholder="Buscar por nombre...">
+                        </div>
+                        <div class="col-md-3">
+                            <input id="clientes_filter_date" class="form-control" type="date" placeholder="Fecha (si aplica)">
+                        </div>
+                    </div>
                     <div class="row">
                         <div class="col-12">
                             <div class="card">
@@ -213,6 +223,7 @@
         </div>
     </div>
 </div>
+<script src="{{ url_for('static', filename='tabla_filtros.js') }}"></script>
 <script src="{{ url_for('static', filename='theme-global.js') }}"></script>
 </body>
 </html>

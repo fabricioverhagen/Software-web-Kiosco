@@ -27,7 +27,8 @@ $(document).ready(function() {
  * @param {string} precio - Precio del producto
  * @param {string} stock - Stock del producto
  */
-function editarProducto(id, descripcion, precio, stock) {
+function editarProducto(id, descripcion, precio, stock, precio_costo, margen_ganancia) {
+    console.log('editarProducto called', {id, descripcion, precio, stock, precio_costo, margen_ganancia});
     // Cambiar el título del modal
     $('#modalTitle').text('Editar Producto');
     
@@ -38,6 +39,18 @@ function editarProducto(id, descripcion, precio, stock) {
     $('#producto_id').val(id);
     $('#descripcion').val(descripcion);
     $('#precio').val(precio);
+    // Rellenar precio costo y margen si existen
+    if (typeof precio_costo !== 'undefined' && precio_costo !== null) {
+        $('#precio_costo').val(precio_costo);
+    } else {
+        $('#precio_costo').val('');
+    }
+
+    if (typeof margen_ganancia !== 'undefined' && margen_ganancia !== null) {
+        $('#margen_ganancia').val(margen_ganancia);
+    } else {
+        $('#margen_ganancia').val('');
+    }
     $('#stock').val(stock);
     
     // Cambiar el texto del botón
@@ -297,4 +310,73 @@ function filtrarProductos(searchTerm) {
             $(this).hide();
         }
     });
+}
+
+// --- NUEVAS FUNCIONES: CÁLCULO INVERSO Y MARGEN ---
+/**
+ * Calcula el margen porcentual a partir de precio y precio de costo.
+ * margen = (precio - costo) / costo * 100
+ */
+function calcularMargenDesdePrecioYCosto() {
+    const costo = parseFloat($('#precio_costo').val()) || 0;
+    const precio = parseFloat($('#precio').val()) || 0;
+
+    if (costo > 0) {
+        const margen = ((precio - costo) / costo) * 100;
+        const margenNormalizado = Math.abs(margen) < 1e-9 ? 0 : margen;
+        $('#margen_ganancia').val(margenNormalizado.toFixed(2));
+    } else {
+        $('#margen_ganancia').val('');
+    }
+}
+
+/**
+ * Calcula el precio a partir de costo y margen porcentual.
+ * precio = costo * (1 + margen/100)
+ */
+function calcularPrecioDesdeCostoYMargen() {
+    const costo = parseFloat($('#precio_costo').val()) || 0;
+    const margen = parseFloat($('#margen_ganancia').val());
+
+    if (!isNaN(margen) && costo > 0) {
+        const precio = costo * (1 + margen / 100);
+        $('#precio').val(precio.toFixed(2));
+    }
+}
+
+// Eventos: cuando cambie precio_costo o precio -> recalcular margen o precio según contexto
+$('#precio_costo').on('input', function() {
+    const margenVal = $('#margen_ganancia').val();
+    const precioVal = $('#precio').val();
+
+    if (margenVal && margenVal !== '') {
+        calcularPrecioDesdeCostoYMargen();
+    } else if (precioVal && precioVal !== '') {
+        calcularMargenDesdePrecioYCosto();
+    }
+});
+
+$('#precio').on('input', function() {
+    const costoVal = $('#precio_costo').val();
+    if (costoVal && costoVal !== '') {
+        calcularMargenDesdePrecioYCosto();
+    }
+});
+
+$('#margen_ganancia').on('input', function() {
+    const costoVal = $('#precio_costo').val();
+    if (costoVal && costoVal !== '') {
+        calcularPrecioDesdeCostoYMargen();
+    }
+});
+
+// Exponer funciones adicionales en window para pruebas manuales
+if (typeof window !== 'undefined') {
+    window.calcularMargenDesdePrecioYCosto = calcularMargenDesdePrecioYCosto;
+    window.calcularPrecioDesdeCostoYMargen = calcularPrecioDesdeCostoYMargen;
+}
+
+// Asegurar que la función esté disponible en el scope global
+if (typeof window !== 'undefined') {
+    window.editarProducto = editarProducto;
 }
