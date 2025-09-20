@@ -108,6 +108,12 @@
                                 <p>Facturas</p>
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a href="{{ url_for('gestion_cajas') }}" class="nav-link">
+                                <i class="nav-icon fas fa-cash-register"></i>
+                                <p>Cajas</p>
+                            </a>
+                        </li>
                         
                         <li class="nav-item">
                             <a href="#" class="nav-link">
@@ -395,6 +401,17 @@
                                                     <div class="info-box-content">
                                                         <span class="info-box-text">Exportar</span>
                                                         <span class="info-box-number">Datos</span>
+                                                    </div>
+                                                </div>
+                                            </a>
+                                        </div>
+                                        <div class="col-md-2 col-sm-4 col-6">
+                                            <a href="{{ url_for('gestion_cajas') }}" class="info-box-link">
+                                                <div class="info-box bg-gradient-teal">
+                                                    <span class="info-box-icon"><i class="fas fa-cash-register"></i></span>
+                                                    <div class="info-box-content">
+                                                        <span class="info-box-text">Gestionar</span>
+                                                        <span class="info-box-number">Cajas</span>
                                                     </div>
                                                 </div>
                                             </a>

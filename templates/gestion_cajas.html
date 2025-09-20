@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+
+{% block page_title %}Gestión de Cajas{% endblock %}
+
+{% block nav_configuracion %}active{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Abrir Caja</h3>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('abrir_caja') }}">
+                    <div class="form-group">
+                        <label for="monto_apertura">Monto de Apertura</label>
+                        <input type="number" class="form-control" step="0.01" min="0" name="monto_apertura" id="monto_apertura" required>
+                    </div>
+                    <button class="btn btn-success">Abrir Caja</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Historial de Cajas</h3>
+            </div>
+            <div class="card-body p-0">
+                {% if cajas %}
+                <div class="table-responsive">
+                    <table class="table table-striped m-0">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Apertura</th>
+                                <th>Usuario</th>
+                                <th>Monto Apertura</th>
+                                <th>Monto Cierre</th>
+                                <th>Cierre</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for caja in cajas %}
+                            <tr>
+                                <td>{{ caja.id_caja }}</td>
+                                <td>{{ caja.fecha_apertura }}</td>
+                                <td>{{ caja.usuario }}</td>
+                                <td>${{ "%.2f"|format(caja.monto_apertura) }}</td>
+                                <td>
+                                    {% if caja.monto_cierre is not none %}
+                                        ${{ "%.2f"|format(caja.monto_cierre) }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>{{ caja.fecha_cierre if caja.fecha_cierre else '-' }}</td>
+                                <td>{{ caja.estado }}</td>
+                                <td>
+                                    {% if caja.estado == 'abierta' %}
+                                    <form method="POST" action="{{ url_for('cerrar_caja', id=caja.id_caja) }}" style="display:inline-block">
+                                        <div class="input-group">
+                                            <input name="monto_cierre" step="0.01" min="0" class="form-control" placeholder="Monto cierre" required>
+                                            <div class="input-group-append">
+                                                <button class="btn btn-primary">Cerrar</button>
+                                            </div>
+                                        </div>
+                                    </form>
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="p-4 text-center text-muted">
+                    <p>No hay registros de cajas todavía.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

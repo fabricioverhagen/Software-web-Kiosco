@@ -14,6 +14,31 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+
+def ensure_cajas_table():
+    """Crea la tabla 'cajas' si no existe."""
+    conn = get_db_connection()
+    try:
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS cajas (
+                id_caja INTEGER PRIMARY KEY AUTOINCREMENT,
+                fecha_apertura TEXT NOT NULL,
+                usuario TEXT,
+                monto_apertura REAL NOT NULL,
+                monto_cierre REAL,
+                fecha_cierre TEXT,
+                estado TEXT NOT NULL -- 'abierta' o 'cerrada'
+            )
+        ''')
+        conn.commit()
+    except Exception as e:
+        print(f"Error creando tabla cajas: {e}")
+    finally:
+        conn.close()
+
+# Asegurarse de que la tabla exista al iniciar
+ensure_cajas_table()
+
 #----------------------------------------------------- Funciones dashboard ------------------------------------------------------
 def get_dashboard_data():
     """Obtiene datos reales para el dashboard"""
@@ -333,6 +358,75 @@ def gestion_productos():
     productos = conn.execute('SELECT * FROM productos ORDER BY descripcion').fetchall()
     conn.close()
     return render_template('gestion_productos.html', productos=productos)
+
+
+@app.route('/dashboard/cajas', methods=['GET'])
+def gestion_cajas():
+    if "user" not in session:
+        flash("Debes iniciar sesión para acceder.", "warning")
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+    cajas = conn.execute('SELECT * FROM cajas ORDER BY fecha_apertura DESC').fetchall()
+    conn.close()
+    return render_template('gestion_cajas.html', cajas=cajas)
+
+
+@app.route('/dashboard/cajas/abrir', methods=['POST'])
+def abrir_caja():
+    if "user" not in session:
+        flash("Debes iniciar sesión para acceder.", "warning")
+        return redirect(url_for("login"))
+
+    usuario = session.get('user')
+    monto_apertura = request.form.get('monto_apertura')
+    try:
+        monto_apertura = float(monto_apertura) if monto_apertura else 0.0
+    except:
+        monto_apertura = 0.0
+
+    fecha_apertura = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    conn = get_db_connection()
+    try:
+        conn.execute('INSERT INTO cajas (fecha_apertura, usuario, monto_apertura, estado) VALUES (?, ?, ?, ?)',
+                     (fecha_apertura, usuario, monto_apertura, 'abierta'))
+        conn.commit()
+        flash('Caja abierta exitosamente', 'success')
+    except Exception as e:
+        flash(f'Error al abrir caja: {e}', 'danger')
+    finally:
+        conn.close()
+
+    return redirect(url_for('gestion_cajas'))
+
+
+@app.route('/dashboard/cajas/cerrar/<int:id>', methods=['POST'])
+def cerrar_caja(id):
+    if "user" not in session:
+        flash("Debes iniciar sesión para acceder.", "warning")
+        return redirect(url_for("login"))
+
+    monto_cierre = request.form.get('monto_cierre')
+    try:
+        monto_cierre = float(monto_cierre) if monto_cierre else None
+    except:
+        monto_cierre = None
+
+    fecha_cierre = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    conn = get_db_connection()
+    try:
+        conn.execute('UPDATE cajas SET monto_cierre = ?, fecha_cierre = ?, estado = ? WHERE id_caja = ?',
+                     (monto_cierre, fecha_cierre, 'cerrada', id))
+        conn.commit()
+        flash('Caja cerrada correctamente', 'success')
+    except Exception as e:
+        flash(f'Error al cerrar caja: {e}', 'danger')
+    finally:
+        conn.close()
+
+    return redirect(url_for('gestion_cajas'))
 
 @app.route('/productos/agregar', methods=['POST'])
 def agregar_producto():
