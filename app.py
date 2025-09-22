@@ -161,7 +161,6 @@ def login():
 
 #----------------------------------------------------------------------------------------------------------------------
 #----------------------------------------------------- Dashboard ------------------------------------------------------
-
 @app.route('/dashboard',methods=['GET'])
 def dashboard():
     if "user" in session:
@@ -174,6 +173,102 @@ def dashboard():
     else:
         flash("Debes iniciar sesión para acceder al dashboard.", "warning")
         return redirect(url_for("login"))
+#----------------------------------------------------- Proveedores ------------------------------------------------------
+# ...existing code...
+@app.route('/dashboard/proveedores', methods=['GET', 'POST'])
+def gestion_proveedores():
+    if "user" not in session:
+        flash("Debes iniciar sesión para acceder.", "warning")
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+    # traer como lista de dict para que |tojson funcione en la plantilla
+    proveedores_rows = conn.execute('SELECT * FROM proveedores ORDER BY razon_social').fetchall()
+    proveedores = [dict(p) for p in proveedores_rows]
+
+    if request.method == 'POST':
+        # Campos del formulario / de la base de datos
+        pid = request.form.get('id')  # pk en la tabla es 'id'
+        razon_social = request.form.get('razon_social', '').strip()
+        nombre_comercial = request.form.get('nombre_comercial', '').strip()
+        cuit = request.form.get('cuit', '').strip()
+        telefono = request.form.get('telefono', '').strip()
+        email = request.form.get('email', '').strip()
+        direccion_fiscal = request.form.get('direccion_fiscal', '').strip()
+        calle_numero = request.form.get('calle_numero', '').strip()
+        ciudad = request.form.get('ciudad', '').strip()
+        provincia = request.form.get('provincia', '').strip()
+        codigo_postal = request.form.get('codigo_postal', '').strip()
+        pais = request.form.get('pais', '').strip()
+        contacto = request.form.get('contacto', '').strip()
+        condicion_pago = request.form.get('condicion_pago', '').strip()
+        estado = request.form.get('estado', 'activo').strip()
+
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        try:
+            if pid:  # EDITAR
+                conn.execute("""
+                    UPDATE proveedores SET
+                        razon_social = ?, nombre_comercial = ?, cuit = ?, telefono = ?, email = ?,
+                        direccion_fiscal = ?, calle_numero = ?, ciudad = ?, provincia = ?, codigo_postal = ?,
+                        pais = ?, contacto = ?, condicion_pago = ?, estado = ?, updated_at = ?
+                    WHERE id = ?
+                """, (
+                    razon_social, nombre_comercial, cuit, telefono, email,
+                    direccion_fiscal, calle_numero, ciudad, provincia, codigo_postal,
+                    pais, contacto, condicion_pago, estado, now, pid
+                ))
+                flash('Proveedor actualizado exitosamente', 'success')
+            else:  # CREAR
+                conn.execute("""
+                    INSERT INTO proveedores (
+                        razon_social, nombre_comercial, cuit, telefono, email,
+                        direccion_fiscal, calle_numero, ciudad, provincia, codigo_postal,
+                        pais, contacto, condicion_pago, estado, created_at, updated_at
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """, (
+                    razon_social, nombre_comercial, cuit, telefono, email,
+                    direccion_fiscal, calle_numero, ciudad, provincia, codigo_postal,
+                    pais, contacto, condicion_pago, estado, now, now
+                ))
+                flash('Proveedor agregado exitosamente', 'success')
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            flash(f'Error al guardar proveedor: {e}', 'danger')
+        finally:
+            proveedores_rows = conn.execute('SELECT * FROM proveedores ORDER BY razon_social').fetchall()
+            proveedores = [dict(p) for p in proveedores_rows]
+
+    conn.close()
+    return render_template('gestion_proveedores.html', proveedores=proveedores)
+
+
+@app.route('/proveedores/eliminar/<int:id>', methods=['POST'])
+def eliminar_proveedor(id):
+    if "user" not in session:
+        flash("Debes iniciar sesión para acceder.", "warning")
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+    try:
+        conn.execute("DELETE FROM proveedores WHERE id = ?", (id,))
+        conn.commit()
+        flash("Proveedor eliminado correctamente", "danger")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Error al eliminar proveedor: {e}", "danger")
+    finally:
+        conn.close()
+
+    return redirect(url_for('gestion_proveedores'))
+# ...existing code...
+
+#----------------------------------------------------- --- ------------------------------------------------------
+
+
+
 #----------------------------------------------------- Clientes ------------------------------------------------------
 
 @app.route('/dashboard/clientes', methods=['GET'])
