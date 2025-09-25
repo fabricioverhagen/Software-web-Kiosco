@@ -28,8 +28,9 @@
             <td>{{ proveedor['ciudad'] }}</td>
             <td>{{ proveedor['estado'] }}</td>
             <td>
-                <button class="btn btn-sm btn-warning" data-toggle="modal" data-target="#proveedorModal"
-                        onclick='openProveedorModal({{ proveedor|tojson|safe }})'>Editar</button>
+    <button class="btn btn-sm btn-warning" data-toggle="modal" data-target="#proveedorModal"
+      onclick='openProveedorModal({{ proveedor|tojson|safe }})'>Editar</button>
+    <a href="{{ url_for('proveedor_facturas', id=proveedor['id']) }}" class="btn btn-sm btn-primary">Facturas</a>
 
                 <form action="{{ url_for('eliminar_proveedor', id=proveedor['id']) }}" method="post" style="display:inline;">
                     <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('¿Eliminar proveedor?')">Eliminar</button>

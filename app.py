@@ -6,6 +6,12 @@ import os
 
 app = Flask(__name__)
 app.secret_key = "admin"
+# Configuración para uploads
+BASE_DIR = os.path.dirname(__file__)
+UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads', 'proveedor_facturas')
+ALLOWED_EXTENSIONS = {'pdf'}
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 def get_db_connection():
     # Esto busca en la carpeta del proyecto
@@ -38,6 +44,37 @@ def ensure_cajas_table():
 
 # Asegurarse de que la tabla exista al iniciar
 ensure_cajas_table()
+
+
+def ensure_facturas_proveedores_table():
+    """Crea la tabla 'facturas_proveedores' si no existe."""
+    conn = get_db_connection()
+    try:
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS facturas_proveedores (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id_proveedor INTEGER NOT NULL,
+                numero TEXT,
+                fecha TEXT,
+                monto REAL,
+                descripcion TEXT,
+                archivo TEXT,
+                creado_en TEXT
+            )
+        ''')
+        conn.commit()
+    except Exception as e:
+        print(f"Error creando tabla facturas_proveedores: {e}")
+    finally:
+        conn.close()
+
+
+# Asegurarse de que la tabla exista al iniciar
+ensure_facturas_proveedores_table()
+
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 #----------------------------------------------------- Funciones dashboard ------------------------------------------------------
 def get_dashboard_data():
@@ -243,6 +280,176 @@ def gestion_proveedores():
 
     conn.close()
     return render_template('gestion_proveedores.html', proveedores=proveedores)
+
+
+@app.route('/dashboard/proveedores/<int:id>/facturas', methods=['GET', 'POST'])
+def proveedor_facturas(id):
+    """Listar y subir facturas para un proveedor."""
+    if "user" not in session:
+        flash("Debes iniciar sesión para acceder.", "warning")
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+    proveedor = conn.execute('SELECT * FROM proveedores WHERE id = ?', (id,)).fetchone()
+    if not proveedor:
+        conn.close()
+        flash('Proveedor no encontrado', 'danger')
+        return redirect(url_for('gestion_proveedores'))
+
+    if request.method == 'POST':
+        # Campos manuales
+        numero = request.form.get('numero', '').strip()
+        fecha = request.form.get('fecha', '').strip()
+        monto = request.form.get('monto', '').strip()
+        descripcion = request.form.get('descripcion', '').strip()
+
+        archivo = None
+        # Manejar archivo subido
+        if 'archivo' in request.files:
+            file = request.files['archivo']
+            if file and file.filename != '' and allowed_file(file.filename):
+                # Generar nombre seguro único
+                timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+                filename = f"prov_{id}_{timestamp}.pdf"
+                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                file.save(file_path)
+                archivo = filename
+            elif file and file.filename != '':
+                flash('Formato de archivo no permitido. Solo PDF.', 'danger')
+                conn.close()
+                return redirect(url_for('proveedor_facturas', id=id))
+
+        # Normalizar monto
+        try:
+            monto_val = float(monto) if monto else None
+        except:
+            monto_val = None
+
+        creado_en = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        try:
+            conn.execute('''INSERT INTO facturas_proveedores (id_proveedor, numero, fecha, monto, descripcion, archivo, creado_en)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)''',
+                         (id, numero if numero else None, fecha if fecha else None, monto_val, descripcion if descripcion else None, archivo, creado_en))
+            conn.commit()
+            flash('Factura registrada correctamente.', 'success')
+        except Exception as e:
+            conn.rollback()
+            flash(f'Error al registrar la factura: {e}', 'danger')
+        finally:
+            pass
+
+    # Traer facturas del proveedor
+    facturas = conn.execute('SELECT * FROM facturas_proveedores WHERE id_proveedor = ? ORDER BY creado_en DESC', (id,)).fetchall()
+    conn.close()
+    return render_template('proveedor_facturas.html', proveedor=proveedor, facturas=facturas)
+
+
+@app.route('/dashboard/proveedores/facturas/descargar/<int:id>', methods=['GET'])
+def descargar_factura(id):
+    if "user" not in session:
+        flash("Debes iniciar sesión para acceder.", "warning")
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+    f = conn.execute('SELECT archivo FROM facturas_proveedores WHERE id = ?', (id,)).fetchone()
+    conn.close()
+    if not f or not f['archivo']:
+        flash('Archivo no disponible', 'danger')
+        return redirect(request.referrer or url_for('gestion_proveedores'))
+
+    return redirect(url_for('static', filename=f"uploads/proveedor_facturas/{f['archivo']}"))
+
+
+@app.route('/dashboard/proveedores/facturas/eliminar/<int:id>', methods=['POST'])
+def eliminar_factura_proveedor(id):
+    if "user" not in session:
+        flash("Debes iniciar sesión para acceder.", "warning")
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+    f = conn.execute('SELECT archivo, id_proveedor FROM facturas_proveedores WHERE id = ?', (id,)).fetchone()
+    if not f:
+        conn.close()
+        flash('Factura no encontrada', 'danger')
+        return redirect(url_for('gestion_proveedores'))
+
+    try:
+        # borrar archivo si existe
+        if f['archivo']:
+            path = os.path.join(app.config['UPLOAD_FOLDER'], f['archivo'])
+            if os.path.exists(path):
+                os.remove(path)
+
+        conn.execute('DELETE FROM facturas_proveedores WHERE id = ?', (id,))
+        conn.commit()
+        flash('Factura eliminada correctamente', 'success')
+    except Exception as e:
+        conn.rollback()
+        flash(f'Error al eliminar factura: {e}', 'danger')
+    finally:
+        proveedor_id = f['id_proveedor']
+        conn.close()
+
+    return redirect(url_for('proveedor_facturas', id=proveedor_id))
+
+
+@app.route('/dashboard/proveedores/facturas/editar/<int:id>', methods=['POST'])
+def editar_factura_proveedor(id):
+    if "user" not in session:
+        flash("Debes iniciar sesión para acceder.", "warning")
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+    f = conn.execute('SELECT * FROM facturas_proveedores WHERE id = ?', (id,)).fetchone()
+    if not f:
+        conn.close()
+        flash('Factura no encontrada', 'danger')
+        return redirect(url_for('gestion_proveedores'))
+
+    numero = request.form.get('numero', '').strip()
+    fecha = request.form.get('fecha', '').strip()
+    monto = request.form.get('monto', '').strip()
+    descripcion = request.form.get('descripcion', '').strip()
+
+    archivo = f['archivo']
+    # Manejar reemplazo de archivo
+    if 'archivo' in request.files:
+        file = request.files['archivo']
+        if file and file.filename != '' and allowed_file(file.filename):
+            # eliminar archivo viejo si existe
+            if archivo:
+                old_path = os.path.join(app.config['UPLOAD_FOLDER'], archivo)
+                if os.path.exists(old_path):
+                    os.remove(old_path)
+            timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+            filename = f"prov_{f['id_proveedor']}_{timestamp}.pdf"
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(file_path)
+            archivo = filename
+        elif file and file.filename != '':
+            flash('Formato de archivo no permitido. Solo PDF.', 'danger')
+            conn.close()
+            return redirect(url_for('proveedor_facturas', id=f['id_proveedor']))
+
+    try:
+        monto_val = float(monto) if monto else None
+    except:
+        monto_val = None
+
+    try:
+        conn.execute('''UPDATE facturas_proveedores SET numero = ?, fecha = ?, monto = ?, descripcion = ?, archivo = ? WHERE id = ?''',
+                     (numero if numero else None, fecha if fecha else None, monto_val, descripcion if descripcion else None, archivo, id))
+        conn.commit()
+        flash('Factura actualizada correctamente', 'success')
+    except Exception as e:
+        conn.rollback()
+        flash(f'Error al actualizar factura: {e}', 'danger')
+    finally:
+        proveedor_id = f['id_proveedor']
+        conn.close()
+
+    return redirect(url_for('proveedor_facturas', id=proveedor_id))
 
 
 @app.route('/proveedores/eliminar/<int:id>', methods=['POST'])

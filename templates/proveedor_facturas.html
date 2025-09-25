@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block page_title %}Facturas proveedor{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Facturas de {{ proveedor['razon_social'] }}</h2>
+    <a href="{{ url_for('gestion_proveedores') }}" class="btn btn-secondary">Volver</a>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Registrar factura</div>
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            <div class="form-row">
+                <div class="form-group col-md-3">
+                    <label>Número</label>
+                    <input type="text" name="numero" class="form-control">
+                </div>
+                <div class="form-group col-md-3">
+                    <label>Fecha</label>
+                    <input type="date" name="fecha" class="form-control">
+                </div>
+                <div class="form-group col-md-3">
+                    <label>Monto</label>
+                    <input type="number" step="0.01" name="monto" class="form-control">
+                </div>
+                <div class="form-group col-md-3">
+                    <label>Archivo (PDF)</label>
+                    <input type="file" name="archivo" accept="application/pdf" class="form-control-file">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Descripción</label>
+                <input type="text" name="descripcion" class="form-control">
+            </div>
+
+            <button class="btn btn-success">Guardar</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">Facturas registradas</div>
+    <div class="card-body p-0">
+        {% if facturas %}
+        <div class="p-3">
+            <div class="form-row">
+                <div class="form-group col-md-4">
+                    <input id="filter_numero" class="form-control" type="text" placeholder="Buscar por número...">
+                </div>
+                <div class="form-group col-md-4">
+                    <input id="filter_fecha" class="form-control" type="date" placeholder="Filtrar por fecha">
+                </div>
+                <div class="form-group col-md-4 text-right">
+                    <button id="clear_filters" class="btn btn-sm btn-secondary">Limpiar filtros</button>
+                </div>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm m-0">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Número</th>
+                        <th>Fecha</th>
+                        <th>Monto</th>
+                        <th>Descripción</th>
+                        <th>Archivo</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for f in facturas %}
+                    <tr>
+                        <td>{{ f['id'] }}</td>
+                        <td>{{ f['numero'] or '-' }}</td>
+                        <td>{{ f['fecha'] or '-' }}</td>
+                        <td>{{ f['monto'] if f['monto'] is not none else '-' }}</td>
+                        <td>{{ f['descripcion'] or '-' }}</td>
+                        <td>
+                            {% if f['archivo'] %}
+                                <a href="{{ url_for('descargar_factura', id=f['id']) }}" target="_blank">Ver PDF</a>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-warning" 
+                                    data-toggle="modal" data-target="#editarFacturaModal"
+                                    data-id="{{ f['id'] }}"
+                                    data-numero="{{ f['numero'] or '' }}"
+                                    data-fecha="{{ f['fecha'] or '' }}"
+                                    data-monto="{{ f['monto'] if f['monto'] is not none else '' }}"
+                                    data-descripcion="{{ f['descripcion'] or '' }}"
+                            >Editar</button>
+
+                            <form method="post" action="{{ url_for('eliminar_factura_proveedor', id=f['id']) }}" style="display:inline;">
+                                <button class="btn btn-sm btn-danger" onclick="return confirm('Eliminar factura?')">Eliminar</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+                {% else %}
+                <div class="p-4 text-center text-muted">No hay facturas registradas para este proveedor.</div>
+                {% endif %}
+        </div>
+</div>
+
+<!-- Modal Editar Factura (dentro del bloque content para que se renderice) -->
+<div class="modal fade" id="editarFacturaModal" tabindex="-1" role="dialog" aria-labelledby="editarFacturaLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <form method="post" enctype="multipart/form-data" id="editarFacturaForm">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editarFacturaLabel">Editar factura</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="id" id="edit_id">
+
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label>Número</label>
+                            <input type="text" name="numero" id="edit_numero" class="form-control">
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label>Fecha</label>
+                            <input type="date" name="fecha" id="edit_fecha" class="form-control">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label>Monto</label>
+                            <input type="number" step="0.01" name="monto" id="edit_monto" class="form-control">
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label>Archivo (PDF) - dejar vacío para conservar</label>
+                            <input type="file" name="archivo" id="edit_archivo" accept="application/pdf" class="form-control-file">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Descripción</label>
+                        <input type="text" name="descripcion" id="edit_descripcion" class="form-control">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-success">Guardar cambios</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function() {
+    $('#editarFacturaModal').on('show.bs.modal', function (event) {
+      var button = $(event.relatedTarget)
+      var id = button.data('id')
+      var numero = button.data('numero')
+      var fecha = button.data('fecha')
+      var monto = button.data('monto')
+      var descripcion = button.data('descripcion')
+
+      var modal = $(this)
+      modal.find('#edit_id').val(id)
+      modal.find('#edit_numero').val(numero)
+      modal.find('#edit_fecha').val(fecha)
+      modal.find('#edit_monto').val(monto)
+      modal.find('#edit_descripcion').val(descripcion)
+
+      // Cambiar action del formulario al endpoint de edición
+      modal.find('#editarFacturaForm').attr('action', '/dashboard/proveedores/facturas/editar/' + id)
+    })
+
+    // Filtrado client-side por número y fecha
+    function applyFilters() {
+        var num = $('#filter_numero').val().toLowerCase();
+        var fecha = $('#filter_fecha').val();
+
+        $('table tbody tr').each(function() {
+            var row = $(this);
+            var cellNumero = row.find('td:nth-child(2)').text().toLowerCase();
+            var cellFecha = row.find('td:nth-child(3)').text().trim();
+
+            var matchNum = !num || cellNumero.indexOf(num) !== -1;
+            var matchFecha = !fecha || cellFecha.indexOf(fecha) !== -1;
+
+            if (matchNum && matchFecha) {
+                row.show();
+            } else {
+                row.hide();
+            }
+        });
+    }
+
+    $('#filter_numero').on('input', applyFilters);
+    $('#filter_fecha').on('change', applyFilters);
+    $('#clear_filters').on('click', function(e){ e.preventDefault(); $('#filter_numero').val(''); $('#filter_fecha').val(''); applyFilters(); });
+})
+</script>
+{% endblock %}
