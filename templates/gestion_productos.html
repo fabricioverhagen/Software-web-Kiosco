@@ -1,301 +1,185 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Gestión de Productos</title>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/css/adminlte.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='productos.css') }}">
+{% extends "base.html" %}
 
-    <script>
-    (function() {
-        const savedTheme = localStorage.getItem('theme') || 'light';
-        let actualTheme = savedTheme === 'auto' ? 
-            (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : 
-            savedTheme;
-        
-        document.documentElement.setAttribute('data-theme', actualTheme);
-        if (document.body) {
-            document.body.classList.add(actualTheme + '-mode');
-        }
-    })();
-</script>
-</head>
+{% block nav_productos %}active{% endblock %}
 
-<body class="hold-transition sidebar-mini layout-fixed">
-    <div class="wrapper">
-        <!-- Navbar -->
-        <nav class="main-header navbar navbar-expand navbar-white navbar-light">
-            <ul class="navbar-nav">
-                <li class="nav-item">
-                    <a class="nav-link" data-widget="pushmenu" href="#" role="button">
-                        <i class="fas fa-bars"></i>
-                    </a>
-                </li>
-                <li class="nav-item d-none d-sm-inline-block">
-                    <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
-                </li>
-            </ul>
-            
-            <ul class="navbar-nav ml-auto">
-                <li class="nav-item dropdown">
-                    <a class="nav-link" data-toggle="dropdown" href="#">
-                        <i class="fas fa-user"></i> {{ session['user'] }}
-                    </a>
-                    <div class="dropdown-menu dropdown-menu-right">
-                        <a href="{{ url_for('login') }}" class="dropdown-item">
-                            <i class="fas fa-sign-out-alt mr-2"></i> Cerrar Sesión
-                        </a>
-                    </div>
-                </li>
-            </ul>
-        </nav>
+{% block page_title %}Gestión de Productos{% endblock %}
 
-        <!-- Main Sidebar -->
-        <aside class="main-sidebar sidebar-dark-primary elevation-4">
-            <a href="{{ url_for('dashboard') }}" class="brand-link">
-                <i class="fas fa-store brand-image img-circle elevation-3"></i>
-                <span class="brand-text font-weight-light">Mi Kiosco</span>
-            </a>
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+<li class="breadcrumb-item active">Productos</li>
+{% endblock %}
 
-            <div class="sidebar">
-                <nav class="mt-2">
-                    <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
-                        <li class="nav-item">
-                            <a href="{{ url_for('dashboard') }}" class="nav-link">
-                                <i class="nav-icon fas fa-tachometer-alt"></i>
-                                <p>Dashboard</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="{{ url_for('gestion_productos') }}" class="nav-link active">
-                                <i class="nav-icon fas fa-box"></i>
-                                <p>Productos</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="{{ url_for('gestion_clientes') }}" class="nav-link">
-                                <i class="nav-icon fas fa-users"></i>
-                                <p>Clientes</p>
-                            </a>
-                        </li>
-                    </ul>
-                </nav>
-            </div>
-        </aside>
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='productos.css') }}">
+{% endblock %}
 
-        <!-- Content Wrapper -->
-        <div class="content-wrapper">
-            <!-- Content Header -->
-            <div class="content-header">
-                <div class="container-fluid">
-                    <div class="row mb-2">
-                        <div class="col-sm-6">
-                            <h1 class="m-0">Gestión de Productos</h1>
-                        </div>
-                        <div class="col-sm-6">
-                            <ol class="breadcrumb float-sm-right">
-                                <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
-                                <li class="breadcrumb-item active">Productos</li>
-                            </ol>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Main content -->
-            <section class="content">
-                <div class="container-fluid">
-                    
-                    <!-- Mensajes Flash -->
-                    {% with messages = get_flashed_messages(with_categories=true) %}
-                        {% if messages %}
-                            {% for category, message in messages %}
-                                <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show">
-                                    {{ message }}
-                                    <button type="button" class="close" data-dismiss="alert">
-                                        <span>&times;</span>
-                                    </button>
-                                </div>
-                            {% endfor %}
-                        {% endif %}
-                    {% endwith %}
-
-                    <!-- Botón Agregar Producto -->
-                    <div class="row mb-3">
-                        <div class="col-12">
-                            <button type="button" class="btn btn-success" data-toggle="modal" data-target="#modalProducto">
-                                <i class="fas fa-plus"></i> Agregar Producto
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Filtros: nombre y fecha -->
-                    <div class="row mb-3">
-                        <div class="col-md-9">
-                            <input id="productos_filter_name" class="form-control" type="text" placeholder="Buscar por nombre...">
-                        </div>
-                        <div class="col-md-3">
-                            <input id="productos_filter_date" class="form-control" type="date" placeholder="Fecha (si aplica)">
-                        </div>
-                    </div>
-
-                    <!-- Tabla de Productos -->
-                    <div class="row">
-                        <div class="col-12">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h3 class="card-title">
-                                        <i class="fas fa-list mr-1"></i>
-                                        Lista de Productos
-                                    </h3>
-                                </div>
-                                <div class="card-body">
-                                    {% if productos %}
-                                    <div class="table-responsive">
-                                        <table class="table table-bordered table-striped">
-                                            <thead>
-    <tr>
-        <th>ID</th>
-        <th>Descripción</th>
-        <th>Precio Costo</th>
-        <th>Margen (%)</th>
-        <th>Precio</th>
-        <th>Stock</th>
-        <th>Estado Stock</th>
-        <th>Acciones</th>
-    </tr>
-</thead>
-<tbody>
-    {% for producto in productos %}
-    <tr>
-        <td>{{ producto.id_producto }}</td>
-        <td>{{ producto.descripcion }}</td>
-        <td>${{ "%.2f"|format(producto.precio_costo if producto.precio_costo else 0) }}</td>
-        <td>{{ "%.2f"|format(producto.margen_ganancia if producto.margen_ganancia else 0) }}%</td>
-        <td>${{ "%.2f"|format(producto.precio) }}</td>
-        <td>{{ producto.stock }}</td>
-        <td>
-            {% if producto.stock == 0 %}
-                <span class="badge badge-danger">Sin Stock</span>
-            {% elif producto.stock <= 5 %}
-                <span class="badge badge-warning">Stock Bajo</span>
-            {% else %}
-                <span class="badge badge-success">Disponible</span>
-            {% endif %}
-        </td>
-        <td>
-            <button class="btn btn-sm btn-info" 
-                onclick='editarProducto({{ producto.id_producto|tojson }}, {{ producto.descripcion|tojson }}, {{ producto.precio|tojson }}, {{ producto.stock|tojson }}, {{ producto.precio_costo|tojson }}, {{ producto.margen_ganancia|tojson }})'>
-                <i class="fas fa-edit"></i> Editar
-            </button>
-            <form method="POST" action="{{ url_for('eliminar_producto', id=producto.id_producto) }}" style="display: inline;">
-                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('¿Estás seguro de eliminar este producto?')">
-                    <i class="fas fa-trash"></i> Eliminar
-                </button>
-            </form>
-        </td>
-    </tr>
-    {% endfor %}
-</tbody>
-                                        </table>
-                                    </div>
-                                    {% else %}
-                                    <div class="text-center py-4">
-                                        <i class="fas fa-box fa-3x text-muted mb-3"></i>
-                                        <h4 class="text-muted">No hay productos registrados</h4>
-                                        <p class="text-muted">Comienza agregando tu primer producto</p>
-                                    </div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-        </div>
-    </div>
-
-    <!-- Modal Agregar/Editar Producto -->
-    <div class="modal fade" id="modalProducto" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h4 class="modal-title" id="modalTitle">Agregar Producto</h4>
-                    <button type="button" class="close" data-dismiss="modal">
-                        <span>&times;</span>
-                    </button>
-                </div>
-                <form id="formProducto" method="POST" action="{{ url_for('agregar_producto') }}" data-add-url="{{ url_for('agregar_producto') }}">
-                    <div class="modal-body">
-    <input type="hidden" id="producto_id" name="producto_id">
-
-    <div class="form-group">
-        <label for="descripcion">Descripción *</label>
-        <input type="text" class="form-control" id="descripcion" name="descripcion" required>
-    </div>
-
-    <div class="form-group">
-        <label for="precio_costo">Precio Costo</label>
-        <input type="number" class="form-control" id="precio_costo" name="precio_costo" step="0.01" min="0">
-    </div>
-
-    <div class="form-group">
-        <label for="margen_ganancia">Margen de Ganancia (%)</label>
-        <input type="number" class="form-control" id="margen_ganancia" name="margen_ganancia" step="0.01" min="0">
-    </div>
-
-    <div class="form-group">
-        <label for="precio">Precio *</label>
-        <input type="number" class="form-control" id="precio" name="precio" step="0.01" min="0" required>
-        <small class="form-text text-muted">
-            Si ingresas Precio Costo y Margen, el Precio se calculará automáticamente.
-        </small>
-    </div>
-
-    <div class="form-group">
-        <label for="stock">Stock *</label>
-        <input type="number" class="form-control" id="stock" name="stock" min="0" required>
-    </div>
-    
-    <div class="form-group">
-        <label for="codigo_barras">Código de Barras</label>
-        <input type="text" class="form-control" id="codigo_barras" name="codigo_barras" placeholder="Código EAN/UPC opcional">
+{% block content %}
+<!-- Botón Agregar Producto -->
+<div class="row mb-3">
+    <div class="col-12">
+        <button type="button" class="btn btn-success" data-toggle="modal" data-target="#modalProducto">
+            <i class="fas fa-plus"></i> Agregar Producto
+        </button>
     </div>
 </div>
 
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-success" id="btnSubmit">
-                            <i class="fas fa-save"></i> Guardar
-                        </button>
-                    </div>
-                </form>
+<!-- Filtros: nombre y fecha -->
+<div class="row mb-3">
+    <div class="col-md-9">
+        <input id="productos_filter_name" class="form-control" type="text" placeholder="Buscar por nombre...">
+    </div>
+    <div class="col-md-3">
+        <input id="productos_filter_date" class="form-control" type="date" placeholder="Fecha (si aplica)">
+    </div>
+</div>
+
+<!-- Tabla de Productos -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-list mr-1"></i>
+                    Lista de Productos
+                </h3>
+            </div>
+            <div class="card-body">
+                {% if productos %}
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Descripción</th>
+                                <th>Precio Costo</th>
+                                <th>Margen (%)</th>
+                                <th>Precio</th>
+                                <th>Stock</th>
+                                <th>Estado Stock</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for producto in productos %}
+                            <tr>
+                                <td>{{ producto.id_producto }}</td>
+                                <td>{{ producto.descripcion }}</td>
+                                <td>${{ "%.2f"|format(producto.precio_costo if producto.precio_costo else 0) }}</td>
+                                <td>{{ "%.2f"|format(producto.margen_ganancia if producto.margen_ganancia else 0) }}%</td>
+                                <td>${{ "%.2f"|format(producto.precio) }}</td>
+                                <td>{{ producto.stock }}</td>
+                                <td>
+                                    {% if producto.stock == 0 %}
+                                        <span class="badge badge-danger">Sin Stock</span>
+                                    {% elif producto.stock <= 5 %}
+                                        <span class="badge badge-warning">Stock Bajo</span>
+                                    {% else %}
+                                        <span class="badge badge-success">Disponible</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-info" 
+                                        onclick='editarProducto({{ producto.id_producto|tojson }}, {{ producto.descripcion|tojson }}, {{ producto.precio|tojson }}, {{ producto.stock|tojson }}, {{ producto.precio_costo|tojson }}, {{ producto.margen_ganancia|tojson }})'>
+                                        <i class="fas fa-edit"></i> Editar
+                                    </button>
+                                    <form method="POST" action="{{ url_for('eliminar_producto', id=producto.id_producto) }}" style="display: inline;">
+                                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('¿Estás seguro de eliminar este producto?')">
+                                            <i class="fas fa-trash"></i> Eliminar
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-box fa-3x text-muted mb-3"></i>
+                    <h4 class="text-muted">No hay productos registrados</h4>
+                    <p class="text-muted">Comienza agregando tu primer producto</p>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
+</div>
 
-    <!-- Scripts -->
-     <script>
-    function calcularPrecio() {
-        const costo = parseFloat(document.getElementById("precio_costo").value) || 0;
-        const margen = parseFloat(document.getElementById("margen_ganancia").value) || 0;
+<!-- Modal Agregar/Editar Producto -->
+<div class="modal fade" id="modalProducto" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="modalTitle">Agregar Producto</h4>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <form id="formProducto" method="POST" action="{{ url_for('agregar_producto') }}" data-add-url="{{ url_for('agregar_producto') }}">
+                <div class="modal-body">
+                    <input type="hidden" id="producto_id" name="producto_id">
 
-        if (costo > 0 && margen > 0) {
-            const precioCalculado = (costo * (1 + margen / 100)).toFixed(2);
-            document.getElementById("precio").value = precioCalculado;
-        }
+                    <div class="form-group">
+                        <label for="descripcion">Descripción *</label>
+                        <input type="text" class="form-control" id="descripcion" name="descripcion" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="precio_costo">Precio Costo</label>
+                        <input type="number" class="form-control" id="precio_costo" name="precio_costo" step="0.01" min="0">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="margen_ganancia">Margen de Ganancia (%)</label>
+                        <input type="number" class="form-control" id="margen_ganancia" name="margen_ganancia" step="0.01" min="0">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="precio">Precio *</label>
+                        <input type="number" class="form-control" id="precio" name="precio" step="0.01" min="0" required>
+                        <small class="form-text text-muted">
+                            Si ingresas Precio Costo y Margen, el Precio se calculará automáticamente.
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="stock">Stock *</label>
+                        <input type="number" class="form-control" id="stock" name="stock" min="0" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="codigo_barras">Código de Barras</label>
+                        <input type="text" class="form-control" id="codigo_barras" name="codigo_barras" placeholder="Código EAN/UPC opcional">
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success" id="btnSubmit">
+                        <i class="fas fa-save"></i> Guardar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function calcularPrecio() {
+    const costo = parseFloat(document.getElementById("precio_costo").value) || 0;
+    const margen = parseFloat(document.getElementById("margen_ganancia").value) || 0;
+
+    if (costo > 0 && margen > 0) {
+        const precioCalculado = (costo * (1 + margen / 100)).toFixed(2);
+        document.getElementById("precio").value = precioCalculado;
     }
+}
 
-    document.getElementById("precio_costo").addEventListener("input", calcularPrecio);
-    document.getElementById("margen_ganancia").addEventListener("input", calcularPrecio);
+document.getElementById("precio_costo").addEventListener("input", calcularPrecio);
+document.getElementById("margen_ganancia").addEventListener("input", calcularPrecio);
 </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.2/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
-    <script src="{{ url_for('static', filename='gestion_productos.js') }}"></script>
-    <script src="{{ url_for('static', filename='tabla_filtros.js') }}"></script>
-    <script src="{{ url_for('static', filename='theme-global.js') }}"></script>
-</body>
-</html>
+<script src="{{ url_for('static', filename='gestion_productos.js') }}"></script>
+<script src="{{ url_for('static', filename='tabla_filtros.js') }}"></script>
+{% endblock %}

@@ -1,304 +1,182 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Nueva Venta</title>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/css/adminlte.min.css">
+{% extends "base.html" %}
 
-    <script>
-    (function() {
-        const savedTheme = localStorage.getItem('theme') || 'light';
-        let actualTheme = savedTheme === 'auto' ? 
-            (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : 
-            savedTheme;
-        
-        document.documentElement.setAttribute('data-theme', actualTheme);
-        if (document.body) {
-            document.body.classList.add(actualTheme + '-mode');
-        }
-    })();
-</script>
-</head>
+{% block nav_ventas %}active{% endblock %}
 
-<body class="hold-transition sidebar-mini layout-fixed">
-    <div class="wrapper">
-        <nav class="main-header navbar navbar-expand navbar-white navbar-light">
-            <ul class="navbar-nav">
-                <li class="nav-item">
-                    <a class="nav-link" data-widget="pushmenu" href="#" role="button">
-                        <i class="fas fa-bars"></i>
-                    </a>
-                </li>
-                <li class="nav-item d-none d-sm-inline-block">
-                    <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
-                </li>
-            </ul>
-            
-            <ul class="navbar-nav ml-auto">
-                <li class="nav-item dropdown">
-                    <a class="nav-link" data-toggle="dropdown" href="#">
-                        <i class="fas fa-user"></i> {{ session['user'] }}
-                    </a>
-                    <div class="dropdown-menu dropdown-menu-right">
-                        <a href="{{ url_for('login') }}" class="dropdown-item">
-                            <i class="fas fa-sign-out-alt mr-2"></i> Cerrar Sesión
-                        </a>
-                    </div>
-                </li>
-            </ul>
-        </nav>
+{% block page_title %}Nueva Venta{% endblock %}
 
-        <aside class="main-sidebar sidebar-dark-primary elevation-4">
-            <a href="{{ url_for('dashboard') }}" class="brand-link">
-                <i class="fas fa-store brand-image img-circle elevation-3"></i>
-                <span class="brand-text font-weight-light">Mi Kiosco</span>
-            </a>
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+<li class="breadcrumb-item">Ventas</li>
+<li class="breadcrumb-item active">Nueva Venta</li>
+{% endblock %}
 
-            <div class="sidebar">
-                <nav class="mt-2">
-                    <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
-                        <li class="nav-item">
-                            <a href="{{ url_for('dashboard') }}" class="nav-link">
-                                <i class="nav-icon fas fa-tachometer-alt"></i>
-                                <p>Dashboard</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="{{ url_for('gestion_productos') }}" class="nav-link">
-                                <i class="nav-icon fas fa-box"></i>
-                                <p>Productos</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="{{ url_for('gestion_clientes') }}" class="nav-link">
-                                <i class="nav-icon fas fa-users"></i>
-                                <p>Clientes</p>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="#" class="nav-link active">
-                                <i class="nav-icon fas fa-cash-register"></i>
-                                <p>
-                                    Ventas
-                                    <i class="right fas fa-angle-left"></i>
-                                </p>
-                            </a>
-                            <ul class="nav nav-treeview">
-                                <li class="nav-item">
-                                    <a href="{{ url_for('ventas') }}" class="nav-link active">
-                                        <i class="far fa-circle nav-icon"></i>
-                                        <p>Nueva Venta</p>
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a href="{{ url_for('listado_facturas') }}" class="nav-link">
-                                        <i class="far fa-circle nav-icon"></i>
-                                        <p>Facturas</p>
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
-                    </ul>
-                </nav>
-            </div>
-        </aside>
-
-        <div class="content-wrapper">
-            <div class="content-header">
-                <div class="container-fluid">
-                    <div class="row mb-2">
-                        <div class="col-sm-6">
-                            <h1 class="m-0">Nueva Venta</h1>
-                        </div>
-                        <div class="col-sm-6">
-                            <ol class="breadcrumb float-sm-right">
-                                <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
-                                <li class="breadcrumb-item">Ventas</li>
-                                <li class="breadcrumb-item active">Nueva Venta</li>
-                            </ol>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <section class="content">
-                <div class="container-fluid">
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title">
-                                <i class="fas fa-shopping-cart mr-1"></i>
-                                Detalles de la Venta
-                            </h3>
-                        </div>
-                        <form method="post">
-                            <div class="card-body">
-                                <div class="form-group">
-                                    <label for="id_cliente">Cliente (opcional):</label>
-                                    <select class="form-control" id="id_cliente" name="id_cliente">
-                                        <option value="">Venta rápida (sin cliente)</option>
-                                        {% for c in clientes %}
-                                        <option value="{{ c.id_cliente }}">{{ c.nombre }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-
-                                <h4>Productos</h4>
-                                <div class="mb-3">
-                                    <label for="barcode_input">Lector de código de barras</label>
-                                    <input id="barcode_input" class="form-control" placeholder="Escanea un código de barras aquí y presiona Enter" autocomplete="off">
-                                </div>
-
-                                <div class="mb-3">
-                                    <label for="search_producto">Buscar producto por nombre</label>
-                                    <input id="search_producto" class="form-control" placeholder="Escribe para buscar..." autocomplete="off">
-                                    <div id="search_results" class="list-group" style="position: absolute; z-index: 1000;
-                                        max-height: 200px; overflow-y: auto; width: calc(100% - 30px); display: none;"></div>
-                                </div>
-
-                                <div id="productos">
-                                    <div class="form-row align-items-center mb-2">
-                                        <div class="col-8">
-                                            <select class="form-control" name="producto[]">
-                                                {% for p in productos %}
-                                                <option value="{{ p.id_producto }}">{{ p.descripcion }} - ${{ "%.2f"|format(p.precio) }} (Stock: {{ p.stock }})</option>
-                                                {% endfor %}
-                                            </select>
-                                        </div>
-                                        <div class="col-4">
-                                            <input type="number" class="form-control" name="cantidad[]" value="1" min="1">
-                                        </div>
-                                    </div>
-                                </div>
-                                <button type="button" class="btn btn-primary btn-sm mt-2" onclick="agregarProducto()">
-                                    <i class="fas fa-plus"></i> Agregar otro producto
-                                </button>
-                                <hr />
-                                <div class="form-group mt-3">
-                                    <label for="metodo_pago">Método de pago</label>
-                                    <select name="metodo_pago" id="metodo_pago" class="form-control" required>
-                                        <option value="efectivo">Efectivo</option>
-                                        <option value="tarjeta_credito">Tarjeta de crédito</option>
-                                        <option value="tarjeta_debito">Tarjeta de débito</option>
-                                        <option value="transferencia">Transferencia</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="card-footer">
-                                <button type="submit" class="btn btn-success">
-                                    <i class="fas fa-check"></i> Confirmar Venta
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </section>
-        </div>
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-shopping-cart mr-1"></i>
+            Detalles de la Venta
+        </h3>
     </div>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.2/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
-
-    <script>
-    function agregarProducto() {
-        let div = document.createElement("div");
-        div.className = "form-row align-items-center mb-2";
-        div.innerHTML = `
-            <div class="col-8">
-                <select class="form-control" name="producto[]">
-                    {% for p in productos %}
-                    <option value="{{ p.id_producto }}">{{ p.descripcion }} - ${{ "%.2f"|format(p.precio) }} (Stock: {{ p.stock }})</option>
+    <form method="post">
+        <div class="card-body">
+            <div class="form-group">
+                <label for="id_cliente">Cliente (opcional):</label>
+                <select class="form-control" id="id_cliente" name="id_cliente">
+                    <option value="">Venta rápida (sin cliente)</option>
+                    {% for c in clientes %}
+                    <option value="{{ c.id_cliente }}">{{ c.nombre }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-4">
-                <input type="number" class="form-control" name="cantidad[]" value="1" min="1">
+
+            <h4>Productos</h4>
+            <div class="mb-3">
+                <label for="barcode_input">Lector de código de barras</label>
+                <input id="barcode_input" class="form-control" placeholder="Escanea un código de barras aquí y presiona Enter" autocomplete="off">
             </div>
-        `;
-        document.getElementById("productos").appendChild(div);
-    }
-    </script>
-    <script>
-    // Agrega un producto al formulario usando los datos del producto (id, descripcion, precio, stock)
-    function agregarProductoDesdeObjeto(prod, cantidad) {
-        cantidad = cantidad || 1;
-        let div = document.createElement("div");
-        div.className = "form-row align-items-center mb-2";
-        div.innerHTML = `
-            <div class="col-8">
-                <select class="form-control" name="producto[]">
-                    <option value="${prod.id_producto}">${prod.descripcion} - $${prod.precio.toFixed(2)} (Stock: ${prod.stock})</option>
+
+            <div class="mb-3">
+                <label for="search_producto">Buscar producto por nombre</label>
+                <input id="search_producto" class="form-control" placeholder="Escribe para buscar..." autocomplete="off">
+                <div id="search_results" class="list-group" style="position: absolute; z-index: 1000;
+                    max-height: 200px; overflow-y: auto; width: calc(100% - 30px); display: none;"></div>
+            </div>
+
+            <div id="productos">
+                <div class="form-row align-items-center mb-2">
+                    <div class="col-8">
+                        <select class="form-control" name="producto[]">
+                            {% for p in productos %}
+                            <option value="{{ p.id_producto }}">{{ p.descripcion }} - ${{ "%.2f"|format(p.precio) }} (Stock: {{ p.stock }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-4">
+                        <input type="number" class="form-control" name="cantidad[]" value="1" min="1">
+                    </div>
+                </div>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm mt-2" onclick="agregarProducto()">
+                <i class="fas fa-plus"></i> Agregar otro producto
+            </button>
+            <hr />
+            <div class="form-group mt-3">
+                <label for="metodo_pago">Método de pago</label>
+                <select name="metodo_pago" id="metodo_pago" class="form-control" required>
+                    <option value="efectivo">Efectivo</option>
+                    <option value="tarjeta_credito">Tarjeta de crédito</option>
+                    <option value="tarjeta_debito">Tarjeta de débito</option>
+                    <option value="transferencia">Transferencia</option>
                 </select>
             </div>
-            <div class="col-4">
-                <input type="number" class="form-control" name="cantidad[]" value="${cantidad}" min="1">
-            </div>
-        `;
-        document.getElementById("productos").appendChild(div);
-    }
+        </div>
+        <div class="card-footer">
+            <button type="submit" class="btn btn-success">
+                <i class="fas fa-check"></i> Confirmar Venta
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
 
-    $(function(){
-        // Búsqueda por nombre con resultados en dropdown
-        let $search = $('#search_producto');
-        let $results = $('#search_results');
+{% block scripts %}
+<script>
+function agregarProducto() {
+    let div = document.createElement("div");
+    div.className = "form-row align-items-center mb-2";
+    div.innerHTML = `
+        <div class="col-8">
+            <select class="form-control" name="producto[]">
+                {% for p in productos %}
+                <option value="{{ p.id_producto }}">{{ p.descripcion }} - ${{ "%.2f"|format(p.precio) }} (Stock: {{ p.stock }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-4">
+            <input type="number" class="form-control" name="cantidad[]" value="1" min="1">
+        </div>
+    `;
+    document.getElementById("productos").appendChild(div);
+}
 
-        let searchTimeout = null;
-        $search.on('input', function(){
-            clearTimeout(searchTimeout);
-            let q = $(this).val().trim();
-            if(!q) { $results.hide(); return; }
-            searchTimeout = setTimeout(function(){
-                $.getJSON('/api/productos/search', { q: q })
-                    .done(function(data){
-                        $results.empty();
-                        if(!data || data.length === 0) { $results.hide(); return; }
-                        data.forEach(function(p){
-                            let item = $(`<a href="#" class="list-group-item list-group-item-action">${p.descripcion} - $${parseFloat(p.precio).toFixed(2)} (Stock: ${p.stock})</a>`);
-                            item.on('click', function(e){
-                                e.preventDefault();
-                                agregarProductoDesdeObjeto(p, 1);
-                                $results.hide();
-                                $search.val('');
-                            });
-                            $results.append(item);
+// Agrega un producto al formulario usando los datos del producto (id, descripcion, precio, stock)
+function agregarProductoDesdeObjeto(prod, cantidad) {
+    cantidad = cantidad || 1;
+    let div = document.createElement("div");
+    div.className = "form-row align-items-center mb-2";
+    div.innerHTML = `
+        <div class="col-8">
+            <select class="form-control" name="producto[]">
+                <option value="${prod.id_producto}">${prod.descripcion} - $${prod.precio.toFixed(2)} (Stock: ${prod.stock})</option>
+            </select>
+        </div>
+        <div class="col-4">
+            <input type="number" class="form-control" name="cantidad[]" value="${cantidad}" min="1">
+        </div>
+    `;
+    document.getElementById("productos").appendChild(div);
+}
+
+$(function(){
+    // Búsqueda por nombre con resultados en dropdown
+    let $search = $('#search_producto');
+    let $results = $('#search_results');
+
+    let searchTimeout = null;
+    $search.on('input', function(){
+        clearTimeout(searchTimeout);
+        let q = $(this).val().trim();
+        if(!q) { $results.hide(); return; }
+        searchTimeout = setTimeout(function(){
+            $.getJSON('/api/productos/search', { q: q })
+                .done(function(data){
+                    $results.empty();
+                    if(!data || data.length === 0) { $results.hide(); return; }
+                    data.forEach(function(p){
+                        let item = $(`<a href="#" class="list-group-item list-group-item-action">${p.descripcion} - $${parseFloat(p.precio).toFixed(2)} (Stock: ${p.stock})</a>`);
+                        item.on('click', function(e){
+                            e.preventDefault();
+                            agregarProductoDesdeObjeto(p, 1);
+                            $results.hide();
+                            $search.val('');
                         });
-                        $results.show();
-                    })
-                    .fail(function(){ $results.hide(); });
-            }, 200);
-        });
-
-        // cerrar resultados al hacer click fuera
-        $(document).on('click', function(e){
-            if(!$(e.target).closest('#search_producto, #search_results').length) {
-                $results.hide();
-            }
-        });
-
-        // Lector de código de barras (input)
-        $('#barcode_input').on('keypress', function(e){
-            if(e.which === 13) { // Enter
-                e.preventDefault();
-                let codigo = $(this).val().trim();
-                if(!codigo) return;
-                // Buscar por código
-                $.getJSON('/api/productos/by_codigo/' + encodeURIComponent(codigo))
-                    .done(function(p){
-                        agregarProductoDesdeObjeto(p, 1);
-                        $('#barcode_input').val('');
-                    })
-                    .fail(function(xhr){
-                        if(xhr && xhr.status === 404) {
-                            alert('Producto no encontrado para el código: ' + codigo);
-                        } else {
-                            alert('Error buscando el producto por código.');
-                        }
+                        $results.append(item);
                     });
-            }
-        });
+                    $results.show();
+                })
+                .fail(function(){ $results.hide(); });
+        }, 200);
     });
-    </script>
-    <script src="{{ url_for('static', filename='theme-global.js') }}"></script>
-</body>
-</html>
+
+    // cerrar resultados al hacer click fuera
+    $(document).on('click', function(e){
+        if(!$(e.target).closest('#search_producto, #search_results').length) {
+            $results.hide();
+        }
+    });
+
+    // Lector de código de barras (input)
+    $('#barcode_input').on('keypress', function(e){
+        if(e.which === 13) { // Enter
+            e.preventDefault();
+            let codigo = $(this).val().trim();
+            if(!codigo) return;
+            // Buscar por código
+            $.getJSON('/api/productos/by_codigo/' + encodeURIComponent(codigo))
+                .done(function(p){
+                    agregarProductoDesdeObjeto(p, 1);
+                    $('#barcode_input').val('');
+                })
+                .fail(function(xhr){
+                    if(xhr && xhr.status === 404) {
+                        alert('Producto no encontrado para el código: ' + codigo);
+                    } else {
+                        alert('Error buscando el producto por código.');
+                    }
+                });
+        }
+    });
+});
+</script>
+{% endblock %}
