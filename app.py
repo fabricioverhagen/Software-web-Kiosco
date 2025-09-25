@@ -73,8 +73,100 @@ def ensure_facturas_proveedores_table():
 ensure_facturas_proveedores_table()
 
 
+def ensure_detalle_factura_metodo_column():
+    """Asegura que la columna metodo_pago exista en detalle_factura."""
+    conn = get_db_connection()
+    try:
+        # Intentamos seleccionar la columna; si falla, alteramos la tabla
+        try:
+            conn.execute('SELECT metodo_pago FROM detalle_factura LIMIT 1').fetchall()
+        except Exception:
+            conn.execute('ALTER TABLE detalle_factura ADD COLUMN metodo_pago TEXT')
+            conn.commit()
+    except Exception as e:
+        print(f"Error asegurando columna metodo_pago: {e}")
+    finally:
+        conn.close()
+
+
+# Aseguramos la columna al iniciar
+ensure_detalle_factura_metodo_column()
+
+
+def ensure_producto_codigo_column():
+    """Asegura que la columna codigo_barras exista en la tabla productos."""
+    conn = get_db_connection()
+    try:
+        try:
+            conn.execute('SELECT codigo_barras FROM productos LIMIT 1').fetchall()
+        except Exception:
+            conn.execute('ALTER TABLE productos ADD COLUMN codigo_barras TEXT')
+            conn.commit()
+    except Exception as e:
+        print(f"Error asegurando columna codigo_barras: {e}")
+    finally:
+        conn.close()
+
+
+# Aseguramos la columna al iniciar
+ensure_producto_codigo_column()
+
+
+def ensure_codigo_barras_unique_index():
+    """Crea un índice único sobre codigo_barras para prevenir duplicados (permite NULLs)."""
+    conn = get_db_connection()
+    try:
+        conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_productos_codigo_barras ON productos(codigo_barras)')
+        conn.commit()
+    except Exception as e:
+        print(f"Error creando índice único codigo_barras: {e}")
+    finally:
+        conn.close()
+
+
+# Aseguramos el índice al iniciar
+ensure_codigo_barras_unique_index()
+
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+@app.route('/api/productos/search', methods=['GET'])
+def api_productos_search():
+    q = request.args.get('q', '').strip()
+    conn = get_db_connection()
+    try:
+        if q:
+            rows = conn.execute("SELECT id_producto, descripcion, precio, stock, codigo_barras FROM productos WHERE descripcion LIKE ? AND stock > 0 LIMIT 20", ('%'+q+'%',)).fetchall()
+        else:
+            rows = conn.execute("SELECT id_producto, descripcion, precio, stock, codigo_barras FROM productos WHERE stock > 0 LIMIT 20").fetchall()
+        productos = [dict(r) for r in rows]
+    except Exception as e:
+        productos = []
+        print(f"Error en api_productos_search: {e}")
+    finally:
+        conn.close()
+
+    return jsonify(productos)
+
+
+@app.route('/api/productos/by_codigo/<codigo>', methods=['GET'])
+def api_productos_by_codigo(codigo):
+    codigo = codigo.strip()
+    conn = get_db_connection()
+    try:
+        row = conn.execute("SELECT id_producto, descripcion, precio, stock, codigo_barras FROM productos WHERE codigo_barras = ?", (codigo,)).fetchone()
+        if not row:
+            return jsonify({'error': 'not found'}), 404
+        producto = dict(row)
+    except Exception as e:
+        print(f"Error en api_productos_by_codigo: {e}")
+        return jsonify({'error': 'server error'}), 500
+    finally:
+        conn.close()
+
+    return jsonify(producto)
 
 #----------------------------------------------------- Funciones dashboard ------------------------------------------------------
 def get_dashboard_data():
@@ -545,6 +637,7 @@ def ventas():
         id_cliente = request.form.get('id_cliente')  # Puede ser None o vacío
         productos = request.form.getlist('producto[]')
         cantidades = request.form.getlist('cantidad[]')
+        metodo_pago = request.form.get('metodo_pago')
 
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -580,12 +673,11 @@ def ventas():
                 precio_unitario = producto['precio']
                 subtotal = precio_unitario * cantidad
                 total_factura += subtotal
-
-                # Insertar en detalle
+                # Insertar en detalle (incluye metodo_pago)
                 cursor.execute("""INSERT INTO detalle_factura 
-                                  (id_factura, id_producto, cantidad, precio_unitario, subtotal)
-                                  VALUES (?, ?, ?, ?, ?)""",
-                               (id_factura, id_producto, cantidad, precio_unitario, subtotal))
+                                  (id_factura, id_producto, cantidad, precio_unitario, subtotal, metodo_pago)
+                                  VALUES (?, ?, ?, ?, ?, ?)""",
+                               (id_factura, id_producto, cantidad, precio_unitario, subtotal, metodo_pago))
 
                 # Descontar stock
                 cursor.execute("UPDATE productos SET stock = stock - ? WHERE id_producto = ?", (cantidad, id_producto))
@@ -619,6 +711,7 @@ def listado_facturas():
         SELECT f.id_factura,
                f.fecha,
                f.total,
+               (SELECT metodo_pago FROM detalle_factura WHERE id_factura = f.id_factura LIMIT 1) as metodo_pago,
                c.nombre as cliente,
                IFNULL(SUM(d.cantidad * (d.precio_unitario - p.precio_costo)), 0) as ganancia
         FROM facturas f
@@ -639,12 +732,42 @@ def detalle_factura(id):
                               FROM facturas f
                               LEFT JOIN clientes c ON f.id_cliente = c.id_cliente
                               WHERE f.id_factura = ?""", (id,)).fetchone()
-    detalles = conn.execute("""SELECT d.cantidad, d.precio_unitario, d.subtotal, p.descripcion
+    detalles = conn.execute("""SELECT d.cantidad, d.precio_unitario, d.subtotal, p.descripcion, d.metodo_pago
                                FROM detalle_factura d
                                JOIN productos p ON d.id_producto = p.id_producto
                                WHERE d.id_factura = ?""", (id,)).fetchall()
     conn.close()
     return render_template('detalle_factura.html', factura=factura, detalles=detalles)
+
+
+@app.route('/dashboard/factura/<int:id>/print')
+def print_factura(id):
+    """Vista imprimible de la factura. Parámetros query:
+       - type: 'invoice' (formato factura) o 'receipt' (recibo térmico)
+       - copies: número de copias (int) para la impresión automática
+    """
+    tipo = request.args.get('type', 'invoice')
+    try:
+        copies = int(request.args.get('copies', 1))
+    except:
+        copies = 1
+
+    conn = get_db_connection()
+    factura = conn.execute("""SELECT f.id_factura, f.fecha, f.total, c.nombre
+                              FROM facturas f
+                              LEFT JOIN clientes c ON f.id_cliente = c.id_cliente
+                              WHERE f.id_factura = ?""", (id,)).fetchone()
+    detalles = conn.execute("""SELECT d.cantidad, d.precio_unitario, d.subtotal, p.descripcion, d.metodo_pago
+                               FROM detalle_factura d
+                               JOIN productos p ON d.id_producto = p.id_producto
+                               WHERE d.id_factura = ?""", (id,)).fetchall()
+    conn.close()
+
+    if not factura:
+        flash('Factura no encontrada', 'danger')
+        return redirect(url_for('listado_facturas'))
+
+    return render_template('print_factura.html', factura=factura, detalles=detalles, tipo=tipo, copies=copies)
 
 
 #------------------------------------------Productos---------------------------------------------------------------------------- 
@@ -738,6 +861,11 @@ def agregar_producto():
     
     descripcion = request.form['descripcion']
     stock = int(request.form['stock'])
+    codigo_barras = request.form.get('codigo_barras')
+    if codigo_barras:
+        codigo_barras = codigo_barras.strip()
+        if codigo_barras == '':
+            codigo_barras = None
 
     # Campos que pueden o no estar
     precio = request.form.get('precio')
@@ -755,11 +883,21 @@ def agregar_producto():
 
     conn = get_db_connection()
     try:
-        conn.execute('INSERT INTO productos (descripcion, precio, stock, precio_costo, margen_ganancia) VALUES (?, ?, ?, ?, ?)',
-                     (descripcion, precio, stock, precio_costo, margen_ganancia))
+        # Validar duplicados de codigo_barras
+        if codigo_barras:
+            exists = conn.execute('SELECT id_producto FROM productos WHERE codigo_barras = ?', (codigo_barras,)).fetchone()
+            if exists:
+                flash('El código de barras ya está registrado en otro producto.', 'danger')
+                conn.close()
+                return redirect(url_for('gestion_productos'))
+        conn.execute(
+            'INSERT INTO productos (descripcion, precio, stock, precio_costo, margen_ganancia, codigo_barras) VALUES (?, ?, ?, ?, ?, ?)',
+            (descripcion, precio, stock, precio_costo, margen_ganancia, codigo_barras)
+        )
         conn.commit()
         flash('Producto agregado exitosamente', 'success')
     except Exception as e:
+        conn.rollback()
         flash(f'Error al agregar producto: {str(e)}', 'danger')
     finally:
         conn.close()
@@ -774,6 +912,11 @@ def editar_producto(id):
     
     descripcion = request.form['descripcion']
     stock = int(request.form['stock'])
+    codigo_barras = request.form.get('codigo_barras')
+    if codigo_barras:
+        codigo_barras = codigo_barras.strip()
+        if codigo_barras == '':
+            codigo_barras = None
 
     precio = request.form.get('precio')
     precio_costo = request.form.get('precio_costo')
@@ -789,8 +932,15 @@ def editar_producto(id):
 
     conn = get_db_connection()
     try:
-        conn.execute('UPDATE productos SET descripcion = ?, precio = ?, stock = ?, precio_costo = ?, margen_ganancia = ? WHERE id_producto = ?',
-                     (descripcion, precio, stock, precio_costo, margen_ganancia, id))
+        # Validar duplicados: otro producto con el mismo codigo_barras
+        if codigo_barras:
+            exists = conn.execute('SELECT id_producto FROM productos WHERE codigo_barras = ? AND id_producto != ?', (codigo_barras, id)).fetchone()
+            if exists:
+                flash('El código de barras ya está registrado en otro producto.', 'danger')
+                conn.close()
+                return redirect(url_for('gestion_productos'))
+        conn.execute('UPDATE productos SET descripcion = ?, precio = ?, stock = ?, precio_costo = ?, margen_ganancia = ?, codigo_barras = ? WHERE id_producto = ?',
+                     (descripcion, precio, stock, precio_costo, margen_ganancia, codigo_barras, id))
         conn.commit()
         flash('Producto actualizado exitosamente', 'success')
     except Exception as e:

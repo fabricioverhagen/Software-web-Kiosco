@@ -151,6 +151,7 @@
                                             <th>ID</th>
                                             <th>Fecha</th>
                                             <th>Cliente</th>
+                                            <th>Método</th>
                                             <th>Total</th>
                                             <th>Ganancia</th>
                                             <th>Acciones</th>
@@ -162,6 +163,13 @@
                                             <td>{{ f.id_factura }}</td>
                                             <td>{{ f.fecha }}</td>
                                             <td>{{ f.cliente if f.cliente else 'Venta rápida' }}</td>
+                                            <td>
+                                                {% if f.metodo_pago == 'efectivo' %}Efectivo
+                                                {% elif f.metodo_pago == 'tarjeta_credito' %}Tarjeta de crédito
+                                                {% elif f.metodo_pago == 'tarjeta_debito' %}Tarjeta de débito
+                                                {% elif f.metodo_pago == 'transferencia' %}Transferencia
+                                                {% else %}-{% endif %}
+                                            </td>
                                             <td>${{ "%.2f"|format(f.total) }}</td>
                                             <td>${{ "%.2f"|format(f.ganancia if f.ganancia else 0) }}</td>
                                             <td>

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Imprimir Factura #{{ factura.id_factura }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body.invoice { font-family: Arial, sans-serif; margin: 20px; }
+        .invoice .header { display: flex; justify-content: space-between; align-items: center; }
+        .invoice h1 { margin: 0; font-size: 20px; }
+        .invoice table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        .invoice th, .invoice td { border: 1px solid #333; padding: 6px; text-align: left; }
+        .invoice .total { text-align: right; font-weight: bold; margin-top: 10px; }
+
+        /* Estilo para recibo térmico */
+        body.receipt { font-family: monospace; width: 280px; margin: 10px auto; }
+        .receipt .center { text-align: center; }
+        .receipt table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+        .receipt td { padding: 4px 0; }
+        .no-border { border: none; }
+
+        @media print {
+            .no-print { display: none; }
+            body.receipt { width: 280px; margin: 0; }
+        }
+    </style>
+</head>
+<body class="{{ 'invoice' if tipo == 'invoice' else 'receipt' }}">
+
+<div class="no-print" style="margin-bottom:10px;">
+    <button onclick="window.print()">Imprimir ahora</button>
+    <button onclick="window.close()">Cerrar</button>
+</div>
+
+{% if tipo == 'invoice' %}
+<div class="invoice">
+    <div class="header">
+        <div>
+            <h1>Mi Kiosco</h1>
+            <div>Dirección: ----</div>
+            <div>Tel: ----</div>
+        </div>
+        <div>
+            <strong>Factura #{{ factura.id_factura }}</strong>
+            <div>{{ factura.fecha }}</div>
+        </div>
+    </div>
+
+    <div style="margin-top:10px;">
+        <strong>Cliente:</strong> {{ factura.cliente if factura.cliente else 'Venta rápida' }}
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Producto</th>
+                <th>Cant.</th>
+                <th>Precio</th>
+                <th>Subtotal</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for d in detalles %}
+            <tr>
+                <td>{{ d.descripcion }}</td>
+                <td>{{ d.cantidad }}</td>
+                <td>${{ "%.2f"|format(d.precio_unitario) }}</td>
+                <td>${{ "%.2f"|format(d.subtotal) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="total">TOTAL: ${{ "%.2f"|format(factura.total) }}</div>
+</div>
+{% else %}
+<div class="receipt center">
+    <h2>Mi Kiosco</h2>
+    <div>{{ factura.fecha }}</div>
+    <div>Factura: {{ factura.id_factura }}</div>
+    <div>Cliente: {{ factura.cliente if factura.cliente else 'Venta rápida' }}</div>
+
+    <table>
+        <tbody>
+            {% for d in detalles %}
+            <tr>
+                <td>{{ d.descripcion }}</td>
+                <td style="text-align:right">{{ d.cantidad }} x ${{ "%.2f"|format(d.precio_unitario) }}</td>
+            </tr>
+            <tr>
+                <td colspan="2" style="text-align:right">Subtotal: ${{ "%.2f"|format(d.subtotal) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h3>TOTAL: ${{ "%.2f"|format(factura.total) }}</h3>
+    <div class="center">Gracias por su compra</div>
+    <div class="center">Software desarrollado por Devtech</div>
+</div>
+{% endif %}
+
+<script>
+// Si se solicitan copias múltiples, hacemos print repetido con un pequeño delay.
+(function(){
+    var copies = {{ copies }} || 1;
+    if(copies <= 1) return;
+    var printed = 0;
+    function doPrint(){
+        if(printed >= copies) return;
+        window.print();
+        printed++;
+        setTimeout(doPrint, 800);
+    }
+    // Empezar después de un pequeño delay para que la ventana termine de renderizar
+    setTimeout(doPrint, 500);
+})();
+</script>
+
+</body>
+</html>

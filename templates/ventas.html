@@ -144,6 +144,18 @@
                                 </div>
 
                                 <h4>Productos</h4>
+                                <div class="mb-3">
+                                    <label for="barcode_input">Lector de código de barras</label>
+                                    <input id="barcode_input" class="form-control" placeholder="Escanea un código de barras aquí y presiona Enter" autocomplete="off">
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="search_producto">Buscar producto por nombre</label>
+                                    <input id="search_producto" class="form-control" placeholder="Escribe para buscar..." autocomplete="off">
+                                    <div id="search_results" class="list-group" style="position: absolute; z-index: 1000;
+                                        max-height: 200px; overflow-y: auto; width: calc(100% - 30px); display: none;"></div>
+                                </div>
+
                                 <div id="productos">
                                     <div class="form-row align-items-center mb-2">
                                         <div class="col-8">
@@ -161,6 +173,16 @@
                                 <button type="button" class="btn btn-primary btn-sm mt-2" onclick="agregarProducto()">
                                     <i class="fas fa-plus"></i> Agregar otro producto
                                 </button>
+                                <hr />
+                                <div class="form-group mt-3">
+                                    <label for="metodo_pago">Método de pago</label>
+                                    <select name="metodo_pago" id="metodo_pago" class="form-control" required>
+                                        <option value="efectivo">Efectivo</option>
+                                        <option value="tarjeta_credito">Tarjeta de crédito</option>
+                                        <option value="tarjeta_debito">Tarjeta de débito</option>
+                                        <option value="transferencia">Transferencia</option>
+                                    </select>
+                                </div>
                             </div>
                             <div class="card-footer">
                                 <button type="submit" class="btn btn-success">
@@ -196,6 +218,86 @@
         `;
         document.getElementById("productos").appendChild(div);
     }
+    </script>
+    <script>
+    // Agrega un producto al formulario usando los datos del producto (id, descripcion, precio, stock)
+    function agregarProductoDesdeObjeto(prod, cantidad) {
+        cantidad = cantidad || 1;
+        let div = document.createElement("div");
+        div.className = "form-row align-items-center mb-2";
+        div.innerHTML = `
+            <div class="col-8">
+                <select class="form-control" name="producto[]">
+                    <option value="${prod.id_producto}">${prod.descripcion} - $${prod.precio.toFixed(2)} (Stock: ${prod.stock})</option>
+                </select>
+            </div>
+            <div class="col-4">
+                <input type="number" class="form-control" name="cantidad[]" value="${cantidad}" min="1">
+            </div>
+        `;
+        document.getElementById("productos").appendChild(div);
+    }
+
+    $(function(){
+        // Búsqueda por nombre con resultados en dropdown
+        let $search = $('#search_producto');
+        let $results = $('#search_results');
+
+        let searchTimeout = null;
+        $search.on('input', function(){
+            clearTimeout(searchTimeout);
+            let q = $(this).val().trim();
+            if(!q) { $results.hide(); return; }
+            searchTimeout = setTimeout(function(){
+                $.getJSON('/api/productos/search', { q: q })
+                    .done(function(data){
+                        $results.empty();
+                        if(!data || data.length === 0) { $results.hide(); return; }
+                        data.forEach(function(p){
+                            let item = $(`<a href="#" class="list-group-item list-group-item-action">${p.descripcion} - $${parseFloat(p.precio).toFixed(2)} (Stock: ${p.stock})</a>`);
+                            item.on('click', function(e){
+                                e.preventDefault();
+                                agregarProductoDesdeObjeto(p, 1);
+                                $results.hide();
+                                $search.val('');
+                            });
+                            $results.append(item);
+                        });
+                        $results.show();
+                    })
+                    .fail(function(){ $results.hide(); });
+            }, 200);
+        });
+
+        // cerrar resultados al hacer click fuera
+        $(document).on('click', function(e){
+            if(!$(e.target).closest('#search_producto, #search_results').length) {
+                $results.hide();
+            }
+        });
+
+        // Lector de código de barras (input)
+        $('#barcode_input').on('keypress', function(e){
+            if(e.which === 13) { // Enter
+                e.preventDefault();
+                let codigo = $(this).val().trim();
+                if(!codigo) return;
+                // Buscar por código
+                $.getJSON('/api/productos/by_codigo/' + encodeURIComponent(codigo))
+                    .done(function(p){
+                        agregarProductoDesdeObjeto(p, 1);
+                        $('#barcode_input').val('');
+                    })
+                    .fail(function(xhr){
+                        if(xhr && xhr.status === 404) {
+                            alert('Producto no encontrado para el código: ' + codigo);
+                        } else {
+                            alert('Error buscando el producto por código.');
+                        }
+                    });
+            }
+        });
+    });
     </script>
     <script src="{{ url_for('static', filename='theme-global.js') }}"></script>
 </body>

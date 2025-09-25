@@ -140,6 +140,14 @@
                                 </div>
                                 <div class="col-md-6 text-right">
                                     <h4>Total: ${{ "%.2f"|format(factura.total) }}</h4>
+                                    <div class="mt-2">
+                                        <a href="{{ url_for('print_factura', id=factura.id_factura, type='invoice') }}" target="_blank" class="btn btn-primary btn-sm">
+                                            <i class="fas fa-file-pdf"></i> Imprimir factura (A4)
+                                        </a>
+                                        <a href="{{ url_for('print_factura', id=factura.id_factura, type='receipt', copies=2) }}" target="_blank" class="btn btn-secondary btn-sm">
+                                            <i class="fas fa-print"></i> Imprimir recibo (2 copias)
+                                        </a>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -161,6 +169,7 @@
                                             <th>Cantidad</th>
                                             <th>Precio Unitario</th>
                                             <th>Subtotal</th>
+                                            <th>Método</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -170,6 +179,7 @@
                                             <td>{{ d.cantidad }}</td>
                                             <td>${{ "%.2f"|format(d.precio_unitario) }}</td>
                                             <td>${{ "%.2f"|format(d.subtotal) }}</td>
+                                            <td>{{ d.metodo_pago or '-' }}</td>
                                         </tr>
                                         {% endfor %}
                                     </tbody>

@@ -27,7 +27,7 @@ $(document).ready(function() {
  * @param {string} precio - Precio del producto
  * @param {string} stock - Stock del producto
  */
-function editarProducto(id, descripcion, precio, stock, precio_costo, margen_ganancia) {
+function editarProducto(id, descripcion, precio, stock, precio_costo, margen_ganancia, codigo_barras) {
     console.log('editarProducto called', {id, descripcion, precio, stock, precio_costo, margen_ganancia});
     // Cambiar el título del modal
     $('#modalTitle').text('Editar Producto');
@@ -52,6 +52,11 @@ function editarProducto(id, descripcion, precio, stock, precio_costo, margen_gan
         $('#margen_ganancia').val('');
     }
     $('#stock').val(stock);
+    if (typeof codigo_barras !== 'undefined' && codigo_barras !== null) {
+        $('#codigo_barras').val(codigo_barras);
+    } else {
+        $('#codigo_barras').val('');
+    }
     
     // Cambiar el texto del botón
     $('#btnSubmit').html('<i class="fas fa-save"></i> Actualizar');
@@ -311,6 +316,16 @@ function filtrarProductos(searchTerm) {
         }
     });
 }
+
+// Filtrado por nombre (sólo)
+$('#productos_filter_name').on('input', function(){
+    const name = $(this).val().trim().toLowerCase();
+    $('.table tbody tr').each(function(){
+        const cols = $(this).find('td');
+        const descripcion = ($(cols[1]).text() || '').toLowerCase();
+        if(!name || descripcion.includes(name)) $(this).show(); else $(this).hide();
+    });
+});
 
 // --- NUEVAS FUNCIONES: CÁLCULO INVERSO Y MARGEN ---
 /**
