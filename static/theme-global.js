@@ -15,6 +15,9 @@ function applyThemeImmediate(theme) {
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         actualTheme = prefersDark ? 'dark' : 'light';
     }
+
+    document.body.classList.remove('dark-mode', 'light-mode');
+    document.documentElement.removeAttribute('data-theme');
     
     // Aplicar al documento
     if (actualTheme === 'dark') {
@@ -44,17 +47,20 @@ function applyAdminLTETheme(theme) {
     
     const navbar = $('.main-header.navbar');
     const sidebar = $('.main-sidebar');
+    const contentWrapper = $('.content-wrapper');
     
+    contentWrapper.removeClass('dark-mode light-mode');
+
     if (actualTheme === 'dark') {
         // Tema oscuro
         navbar.removeClass('navbar-white navbar-light').addClass('navbar-dark');
         sidebar.removeClass('sidebar-light-primary').addClass('sidebar-dark-primary');
-        $('.content-wrapper').addClass('dark-mode');
+        contentWrapper.addClass('dark-mode');
     } else {
         // Tema claro
         navbar.removeClass('navbar-dark').addClass('navbar-white navbar-light');
         sidebar.removeClass('sidebar-dark-primary').addClass('sidebar-light-primary');
-        $('.content-wrapper').removeClass('dark-mode');
+        contentWrapper.removeClass('dark-mode');
     }
 }
 
