@@ -51,42 +51,6 @@ Software-web-Kiosco/
 - Git
 - Entorno virtual recomendado
 
-## Instalación
-
-1. Clonar el repositorio:
-
-```bash
-git clone https://github.com/fabricioverhagen/Software-web-Kiosco.git
-cd Software-web-Kiosco
-```
-
-2. Crear y activar el entorno virtual:
-
-En Windows PowerShell:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-```
-
-3. Instalar dependencias:
-
-```bash
-pip install -r requirements.txt
-```
-
-4. Ejecutar la aplicación:
-
-```bash
-python app.py
-```
-
-La aplicación quedará disponible en:
-
-```text
-http://127.0.0.1:5000
-```
-
 ## Configuración de la base de datos
 
 La aplicación usa SQLite con la base de datos `basededatosflask.db`.
@@ -145,35 +109,9 @@ La base de datos está diseñada para soportar múltiples usuarios con aislamien
 - monto de apertura y cierre
 - historial por usuario
 
-## Seguridad
 
-Al ser una aplicación de gestión local/educativa, la configuración actual usa una clave de sesión por defecto y una implementación básica de autenticación. Para entornos de producción se recomienda:
 
-- usar una `SECRET_KEY` segura
-- mover la configuración a variables de entorno
-- usar hash para contraseñas en lugar de texto plano
-- habilitar HTTPS
-- limitar accesos y permisos
-- usar una base de datos más robusta en producción si se escala
 
-## Pruebas
-
-El proyecto incluye pruebas básicas en `tests/`:
-
-```bash
-pytest
-```
-
-## Recomendaciones para producción
-
-Para dejar el proyecto listo para un uso más serio, se recomienda:
-
-- cambiar la clave secreta por una segura
-- usar variables de entorno para credenciales y configuraciones
-- reforzar la seguridad de contraseñas
-- limpiar la base de datos de datos de prueba
-- crear backups regulares de SQLite
-- revisar permisos y roles por usuario
 
 ## Licencia
 
@@ -185,9 +123,3 @@ Proyecto desarrollado por el equipo del sistema de gestión de kiosco.
 
 ---
 
-Si quieres, puedo continuar con una segunda versión del README enfocada en:
-
-- README más premium para GitHub
-- README en inglés
-- README técnico para deploy y producción
-- README con badges y pantallas del sistema
