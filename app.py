@@ -5,51 +5,114 @@ import os
 
 
 app = Flask(__name__)
-app.secret_key = "admin"
-# Configuración para uploads
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-me-in-production")
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = False
+
 BASE_DIR = os.path.dirname(__file__)
+DB_PATH = os.path.join(BASE_DIR, 'basededatosflask.db')
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads', 'proveedor_facturas')
 ALLOWED_EXTENSIONS = {'pdf'}
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
+
 def get_db_connection():
-    # Esto busca en la carpeta del proyecto
-    db_path = os.path.join(os.path.dirname(__file__), 'basededatosflask.db')
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 
-def ensure_cajas_table():
-    """Crea la tabla 'cajas' si no existe."""
+def table_has_column(conn, table_name, column_name):
+    cols = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+    return any(col[1] == column_name for col in cols)
+
+
+def initialize_database():
+    """Crea el esquema limpio para aislamiento total por usuario."""
     conn = get_db_connection()
     try:
         conn.execute('''
-            CREATE TABLE IF NOT EXISTS cajas (
-                id_caja INTEGER PRIMARY KEY AUTOINCREMENT,
-                fecha_apertura TEXT NOT NULL,
-                usuario TEXT,
-                monto_apertura REAL NOT NULL,
-                monto_cierre REAL,
-                fecha_cierre TEXT,
-                estado TEXT NOT NULL -- 'abierta' o 'cerrada'
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                password TEXT NOT NULL,
+                rol TEXT DEFAULT 'usuario'
             )
         ''')
-        conn.commit()
-    except Exception as e:
-        print(f"Error creando tabla cajas: {e}")
-    finally:
-        conn.close()
 
-# Asegurarse de que la tabla exista al iniciar
-ensure_cajas_table()
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS clientes (
+                id_cliente INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                email TEXT,
+                telefono TEXT,
+                direccion TEXT,
+                id_usuario INTEGER NOT NULL
+            )
+        ''')
 
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS proveedores (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                razon_social TEXT,
+                nombre_comercial TEXT,
+                cuit TEXT,
+                telefono TEXT,
+                email TEXT,
+                direccion_fiscal TEXT,
+                calle_numero TEXT,
+                ciudad TEXT,
+                provincia TEXT,
+                codigo_postal TEXT,
+                pais TEXT,
+                contacto TEXT,
+                condicion_pago TEXT,
+                estado TEXT DEFAULT 'activo',
+                created_at TEXT,
+                updated_at TEXT,
+                id_usuario INTEGER NOT NULL
+            )
+        ''')
 
-def ensure_facturas_proveedores_table():
-    """Crea la tabla 'facturas_proveedores' si no existe."""
-    conn = get_db_connection()
-    try:
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS productos (
+                id_producto INTEGER PRIMARY KEY AUTOINCREMENT,
+                descripcion TEXT NOT NULL,
+                precio REAL,
+                stock INTEGER DEFAULT 0,
+                precio_costo REAL,
+                margen_ganancia REAL,
+                codigo_barras TEXT,
+                id_usuario INTEGER NOT NULL
+            )
+        ''')
+
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS facturas (
+                id_factura INTEGER PRIMARY KEY AUTOINCREMENT,
+                id_cliente INTEGER,
+                fecha TEXT,
+                total REAL DEFAULT 0,
+                id_usuario INTEGER NOT NULL
+            )
+        ''')
+
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS detalle_factura (
+                id_detalle INTEGER PRIMARY KEY AUTOINCREMENT,
+                id_factura INTEGER NOT NULL,
+                id_producto INTEGER NOT NULL,
+                cantidad INTEGER NOT NULL,
+                precio_unitario REAL,
+                subtotal REAL,
+                metodo_pago TEXT,
+                id_usuario INTEGER NOT NULL
+            )
+        ''')
+
         conn.execute('''
             CREATE TABLE IF NOT EXISTS facturas_proveedores (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,73 +122,74 @@ def ensure_facturas_proveedores_table():
                 monto REAL,
                 descripcion TEXT,
                 archivo TEXT,
-                creado_en TEXT
+                creado_en TEXT,
+                id_usuario INTEGER NOT NULL
             )
         ''')
+
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS cajas (
+                id_caja INTEGER PRIMARY KEY AUTOINCREMENT,
+                fecha_apertura TEXT NOT NULL,
+                usuario TEXT,
+                monto_apertura REAL NOT NULL,
+                monto_cierre REAL,
+                fecha_cierre TEXT,
+                estado TEXT NOT NULL,
+                id_usuario INTEGER NOT NULL
+            )
+        ''')
+
+        for table_name, column_name in [
+            ("detalle_factura", "metodo_pago"),
+            ("productos", "codigo_barras"),
+            ("clientes", "id_usuario"),
+            ("proveedores", "id_usuario"),
+            ("facturas", "id_usuario"),
+            ("cajas", "id_usuario"),
+            ("facturas_proveedores", "id_usuario"),
+        ]:
+            if not table_has_column(conn, table_name, column_name):
+                conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} INTEGER")
+
+        conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_productos_codigo_barras_usuario ON productos(id_usuario, codigo_barras)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_clientes_usuario ON clientes(id_usuario)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_proveedores_usuario ON proveedores(id_usuario)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_productos_usuario ON productos(id_usuario)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_facturas_usuario ON facturas(id_usuario)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_detalle_factura_usuario ON detalle_factura(id_usuario)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_facturas_proveedores_usuario ON facturas_proveedores(id_usuario)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_cajas_usuario ON cajas(id_usuario)')
+
         conn.commit()
-    except Exception as e:
-        print(f"Error creando tabla facturas_proveedores: {e}")
     finally:
         conn.close()
 
 
-# Asegurarse de que la tabla exista al iniciar
-ensure_facturas_proveedores_table()
+initialize_database()
 
 
-def ensure_detalle_factura_metodo_column():
-    """Asegura que la columna metodo_pago exista en detalle_factura."""
+def get_current_user_id():
+    user_id = session.get("user_id")
+    if user_id is not None:
+        return user_id
+
+    nombre = session.get("user")
+    if not nombre:
+        return None
+
     conn = get_db_connection()
     try:
-        # Intentamos seleccionar la columna; si falla, alteramos la tabla
-        try:
-            conn.execute('SELECT metodo_pago FROM detalle_factura LIMIT 1').fetchall()
-        except Exception:
-            conn.execute('ALTER TABLE detalle_factura ADD COLUMN metodo_pago TEXT')
-            conn.commit()
-    except Exception as e:
-        print(f"Error asegurando columna metodo_pago: {e}")
+        user = conn.execute("SELECT id FROM usuarios WHERE nombre = ?", (nombre,)).fetchone()
+        if user:
+            session["user_id"] = user["id"]
+            return user["id"]
+    except Exception:
+        pass
     finally:
         conn.close()
 
-
-# Aseguramos la columna al iniciar
-ensure_detalle_factura_metodo_column()
-
-
-def ensure_producto_codigo_column():
-    """Asegura que la columna codigo_barras exista en la tabla productos."""
-    conn = get_db_connection()
-    try:
-        try:
-            conn.execute('SELECT codigo_barras FROM productos LIMIT 1').fetchall()
-        except Exception:
-            conn.execute('ALTER TABLE productos ADD COLUMN codigo_barras TEXT')
-            conn.commit()
-    except Exception as e:
-        print(f"Error asegurando columna codigo_barras: {e}")
-    finally:
-        conn.close()
-
-
-# Aseguramos la columna al iniciar
-ensure_producto_codigo_column()
-
-
-def ensure_codigo_barras_unique_index():
-    """Crea un índice único sobre codigo_barras para prevenir duplicados (permite NULLs)."""
-    conn = get_db_connection()
-    try:
-        conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_productos_codigo_barras ON productos(codigo_barras)')
-        conn.commit()
-    except Exception as e:
-        print(f"Error creando índice único codigo_barras: {e}")
-    finally:
-        conn.close()
-
-
-# Aseguramos el índice al iniciar
-ensure_codigo_barras_unique_index()
+    return None
 
 
 def allowed_file(filename):
@@ -135,13 +199,17 @@ def allowed_file(filename):
 @app.route('/api/productos/search', methods=['GET'])
 def api_productos_search():
     q = request.args.get('q', '').strip()
+    user_id = get_current_user_id()
     conn = get_db_connection()
     try:
-        if q:
-            rows = conn.execute("SELECT id_producto, descripcion, precio, stock, codigo_barras FROM productos WHERE descripcion LIKE ? AND stock > 0 LIMIT 20", ('%'+q+'%',)).fetchall()
+        if user_id is None:
+            productos = []
+        elif q:
+            rows = conn.execute("SELECT id_producto, descripcion, precio, stock, codigo_barras FROM productos WHERE id_usuario = ? AND descripcion LIKE ? AND stock > 0 LIMIT 20", (user_id, '%'+q+'%',)).fetchall()
+            productos = [dict(r) for r in rows]
         else:
-            rows = conn.execute("SELECT id_producto, descripcion, precio, stock, codigo_barras FROM productos WHERE stock > 0 LIMIT 20").fetchall()
-        productos = [dict(r) for r in rows]
+            rows = conn.execute("SELECT id_producto, descripcion, precio, stock, codigo_barras FROM productos WHERE id_usuario = ? AND stock > 0 LIMIT 20", (user_id,)).fetchall()
+            productos = [dict(r) for r in rows]
     except Exception as e:
         productos = []
         print(f"Error en api_productos_search: {e}")
@@ -154,9 +222,12 @@ def api_productos_search():
 @app.route('/api/productos/by_codigo/<codigo>', methods=['GET'])
 def api_productos_by_codigo(codigo):
     codigo = codigo.strip()
+    user_id = get_current_user_id()
     conn = get_db_connection()
     try:
-        row = conn.execute("SELECT id_producto, descripcion, precio, stock, codigo_barras FROM productos WHERE codigo_barras = ?", (codigo,)).fetchone()
+        if user_id is None:
+            return jsonify({'error': 'not found'}), 404
+        row = conn.execute("SELECT id_producto, descripcion, precio, stock, codigo_barras FROM productos WHERE id_usuario = ? AND codigo_barras = ?", (user_id, codigo)).fetchone()
         if not row:
             return jsonify({'error': 'not found'}), 404
         producto = dict(row)
@@ -170,9 +241,10 @@ def api_productos_by_codigo(codigo):
 
 #----------------------------------------------------- Funciones dashboard ------------------------------------------------------
 def get_dashboard_data():
-    """Obtiene datos reales para el dashboard"""
+    """Obtiene datos reales para el dashboard del usuario logueado."""
+    user_id = get_current_user_id()
     conn = get_db_connection()
-    
+
     stats = {
         'ventas_hoy': 0,
         'total_dia': 0,
@@ -180,41 +252,42 @@ def get_dashboard_data():
         'stock_bajo': 0,
         'total_clientes': 0
     }
-    
+
     try:
-        # Contar clientes totales
-        stats['total_clientes'] = conn.execute('SELECT COUNT(*) as count FROM clientes').fetchone()['count']
-        
-        # Productos con stock
-        try:
-            stats['productos_stock'] = conn.execute('SELECT COUNT(*) as count FROM productos WHERE stock > 0').fetchone()['count']
-            stats['stock_bajo'] = conn.execute('SELECT COUNT(*) as count FROM productos WHERE stock <= 5 AND stock > 0').fetchone()['count']
-        except:
-            stats['productos_stock'] = 0
-            stats['stock_bajo'] = 0
-        
-        # Ventas del día
+        if user_id is None:
+            return stats
+
+        stats['total_clientes'] = conn.execute('SELECT COUNT(*) as count FROM clientes WHERE id_usuario = ?', (user_id,)).fetchone()['count']
+
+        stats['productos_stock'] = conn.execute('SELECT COUNT(*) as count FROM productos WHERE id_usuario = ? AND stock > 0', (user_id,)).fetchone()['count']
+        stats['stock_bajo'] = conn.execute('SELECT COUNT(*) as count FROM productos WHERE id_usuario = ? AND stock <= 5 AND stock > 0', (user_id,)).fetchone()['count']
+
         hoy = datetime.now().strftime("%Y-%m-%d")
-        stats['ventas_hoy'] = conn.execute('SELECT COUNT(*) as count FROM facturas WHERE DATE(fecha) = ?', (hoy,)).fetchone()['count']
-        stats['total_dia'] = conn.execute('SELECT SUM(total) as total FROM facturas WHERE DATE(fecha) = ?', (hoy,)).fetchone()['total']
+        stats['ventas_hoy'] = conn.execute('SELECT COUNT(*) as count FROM facturas WHERE id_usuario = ? AND DATE(fecha) = ?', (user_id, hoy)).fetchone()['count']
+        stats['total_dia'] = conn.execute('SELECT SUM(total) as total FROM facturas WHERE id_usuario = ? AND DATE(fecha) = ?', (user_id, hoy)).fetchone()['total']
         if stats['total_dia'] is None:
             stats['total_dia'] = 0
         else:
             stats['total_dia'] = round(stats['total_dia'], 2)
-            
+
     except Exception as e:
         print(f"Error obteniendo estadísticas: {e}")
     finally:
         conn.close()
-    
+
     return stats
 
+
 def get_productos_stock_bajo():
-    """Obtiene productos con stock bajo"""
+    """Obtiene productos con stock bajo del usuario actual."""
+    user_id = get_current_user_id()
     conn = get_db_connection()
     productos = []
-    
+
     try:
+        if user_id is None:
+            return productos
+
         query = '''
         SELECT descripcion, stock, 5 as stock_minimo,
                CASE 
@@ -223,17 +296,17 @@ def get_productos_stock_bajo():
                    ELSE 'Normal'
                END as estado
         FROM productos 
-        WHERE stock <= 5
+        WHERE id_usuario = ? AND stock <= 5
         ORDER BY stock ASC
         LIMIT 10
         '''
-        productos = conn.execute(query).fetchall()
+        productos = conn.execute(query, (user_id,)).fetchall()
     except Exception as e:
         print(f"Error obteniendo productos con stock bajo: {e}")
         productos = []
     finally:
         conn.close()
-    
+
     return productos
 
 
@@ -282,6 +355,7 @@ def login():
 
         if user:
             session["user"] = user["nombre"]
+            session["user_id"] = user["id"]
             return redirect(url_for("dashboard"))
         else:
             flash("Email o contraseña incorrectos.", "danger")
@@ -310,14 +384,13 @@ def gestion_proveedores():
         flash("Debes iniciar sesión para acceder.", "warning")
         return redirect(url_for("login"))
 
+    user_id = get_current_user_id()
     conn = get_db_connection()
-    # traer como lista de dict para que |tojson funcione en la plantilla
-    proveedores_rows = conn.execute('SELECT * FROM proveedores ORDER BY razon_social').fetchall()
+    proveedores_rows = conn.execute('SELECT * FROM proveedores WHERE id_usuario = ? ORDER BY razon_social', (user_id,)).fetchall()
     proveedores = [dict(p) for p in proveedores_rows]
 
     if request.method == 'POST':
-        # Campos del formulario / de la base de datos
-        pid = request.form.get('id')  # pk en la tabla es 'id'
+        pid = request.form.get('id')
         razon_social = request.form.get('razon_social', '').strip()
         nombre_comercial = request.form.get('nombre_comercial', '').strip()
         cuit = request.form.get('cuit', '').strip()
@@ -336,30 +409,30 @@ def gestion_proveedores():
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         try:
-            if pid:  # EDITAR
+            if pid:
                 conn.execute("""
                     UPDATE proveedores SET
                         razon_social = ?, nombre_comercial = ?, cuit = ?, telefono = ?, email = ?,
                         direccion_fiscal = ?, calle_numero = ?, ciudad = ?, provincia = ?, codigo_postal = ?,
                         pais = ?, contacto = ?, condicion_pago = ?, estado = ?, updated_at = ?
-                    WHERE id = ?
+                    WHERE id = ? AND id_usuario = ?
                 """, (
                     razon_social, nombre_comercial, cuit, telefono, email,
                     direccion_fiscal, calle_numero, ciudad, provincia, codigo_postal,
-                    pais, contacto, condicion_pago, estado, now, pid
+                    pais, contacto, condicion_pago, estado, now, pid, user_id
                 ))
                 flash('Proveedor actualizado exitosamente', 'success')
-            else:  # CREAR
+            else:
                 conn.execute("""
                     INSERT INTO proveedores (
                         razon_social, nombre_comercial, cuit, telefono, email,
                         direccion_fiscal, calle_numero, ciudad, provincia, codigo_postal,
-                        pais, contacto, condicion_pago, estado, created_at, updated_at
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                        pais, contacto, condicion_pago, estado, created_at, updated_at, id_usuario
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """, (
                     razon_social, nombre_comercial, cuit, telefono, email,
                     direccion_fiscal, calle_numero, ciudad, provincia, codigo_postal,
-                    pais, contacto, condicion_pago, estado, now, now
+                    pais, contacto, condicion_pago, estado, now, now, user_id
                 ))
                 flash('Proveedor agregado exitosamente', 'success')
             conn.commit()
@@ -367,7 +440,7 @@ def gestion_proveedores():
             conn.rollback()
             flash(f'Error al guardar proveedor: {e}', 'danger')
         finally:
-            proveedores_rows = conn.execute('SELECT * FROM proveedores ORDER BY razon_social').fetchall()
+            proveedores_rows = conn.execute('SELECT * FROM proveedores WHERE id_usuario = ? ORDER BY razon_social', (user_id,)).fetchall()
             proveedores = [dict(p) for p in proveedores_rows]
 
     conn.close()
@@ -376,31 +449,28 @@ def gestion_proveedores():
 
 @app.route('/dashboard/proveedores/<int:id>/facturas', methods=['GET', 'POST'])
 def proveedor_facturas(id):
-    """Listar y subir facturas para un proveedor."""
     if "user" not in session:
         flash("Debes iniciar sesión para acceder.", "warning")
         return redirect(url_for("login"))
 
+    user_id = get_current_user_id()
     conn = get_db_connection()
-    proveedor = conn.execute('SELECT * FROM proveedores WHERE id = ?', (id,)).fetchone()
+    proveedor = conn.execute('SELECT * FROM proveedores WHERE id = ? AND id_usuario = ?', (id, user_id)).fetchone()
     if not proveedor:
         conn.close()
         flash('Proveedor no encontrado', 'danger')
         return redirect(url_for('gestion_proveedores'))
 
     if request.method == 'POST':
-        # Campos manuales
         numero = request.form.get('numero', '').strip()
         fecha = request.form.get('fecha', '').strip()
         monto = request.form.get('monto', '').strip()
         descripcion = request.form.get('descripcion', '').strip()
 
         archivo = None
-        # Manejar archivo subido
         if 'archivo' in request.files:
             file = request.files['archivo']
             if file and file.filename != '' and allowed_file(file.filename):
-                # Generar nombre seguro único
                 timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
                 filename = f"prov_{id}_{timestamp}.pdf"
                 file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
@@ -411,7 +481,6 @@ def proveedor_facturas(id):
                 conn.close()
                 return redirect(url_for('proveedor_facturas', id=id))
 
-        # Normalizar monto
         try:
             monto_val = float(monto) if monto else None
         except:
@@ -420,19 +489,16 @@ def proveedor_facturas(id):
         creado_en = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         try:
-            conn.execute('''INSERT INTO facturas_proveedores (id_proveedor, numero, fecha, monto, descripcion, archivo, creado_en)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)''',
-                         (id, numero if numero else None, fecha if fecha else None, monto_val, descripcion if descripcion else None, archivo, creado_en))
+            conn.execute('''INSERT INTO facturas_proveedores (id_proveedor, numero, fecha, monto, descripcion, archivo, creado_en, id_usuario)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                         (id, numero if numero else None, fecha if fecha else None, monto_val, descripcion if descripcion else None, archivo, creado_en, user_id))
             conn.commit()
             flash('Factura registrada correctamente.', 'success')
         except Exception as e:
             conn.rollback()
             flash(f'Error al registrar la factura: {e}', 'danger')
-        finally:
-            pass
 
-    # Traer facturas del proveedor
-    facturas = conn.execute('SELECT * FROM facturas_proveedores WHERE id_proveedor = ? ORDER BY creado_en DESC', (id,)).fetchall()
+    facturas = conn.execute('SELECT * FROM facturas_proveedores WHERE id_proveedor = ? AND id_usuario = ? ORDER BY creado_en DESC', (id, user_id)).fetchall()
     conn.close()
     return render_template('proveedor_facturas.html', proveedor=proveedor, facturas=facturas)
 
@@ -443,8 +509,9 @@ def descargar_factura(id):
         flash("Debes iniciar sesión para acceder.", "warning")
         return redirect(url_for("login"))
 
+    user_id = get_current_user_id()
     conn = get_db_connection()
-    f = conn.execute('SELECT archivo FROM facturas_proveedores WHERE id = ?', (id,)).fetchone()
+    f = conn.execute('SELECT archivo FROM facturas_proveedores WHERE id = ? AND id_usuario = ?', (id, user_id)).fetchone()
     conn.close()
     if not f or not f['archivo']:
         flash('Archivo no disponible', 'danger')
@@ -459,21 +526,21 @@ def eliminar_factura_proveedor(id):
         flash("Debes iniciar sesión para acceder.", "warning")
         return redirect(url_for("login"))
 
+    user_id = get_current_user_id()
     conn = get_db_connection()
-    f = conn.execute('SELECT archivo, id_proveedor FROM facturas_proveedores WHERE id = ?', (id,)).fetchone()
+    f = conn.execute('SELECT archivo, id_proveedor FROM facturas_proveedores WHERE id = ? AND id_usuario = ?', (id, user_id)).fetchone()
     if not f:
         conn.close()
         flash('Factura no encontrada', 'danger')
         return redirect(url_for('gestion_proveedores'))
 
     try:
-        # borrar archivo si existe
         if f['archivo']:
             path = os.path.join(app.config['UPLOAD_FOLDER'], f['archivo'])
             if os.path.exists(path):
                 os.remove(path)
 
-        conn.execute('DELETE FROM facturas_proveedores WHERE id = ?', (id,))
+        conn.execute('DELETE FROM facturas_proveedores WHERE id = ? AND id_usuario = ?', (id, user_id))
         conn.commit()
         flash('Factura eliminada correctamente', 'success')
     except Exception as e:
@@ -492,8 +559,9 @@ def editar_factura_proveedor(id):
         flash("Debes iniciar sesión para acceder.", "warning")
         return redirect(url_for("login"))
 
+    user_id = get_current_user_id()
     conn = get_db_connection()
-    f = conn.execute('SELECT * FROM facturas_proveedores WHERE id = ?', (id,)).fetchone()
+    f = conn.execute('SELECT * FROM facturas_proveedores WHERE id = ? AND id_usuario = ?', (id, user_id)).fetchone()
     if not f:
         conn.close()
         flash('Factura no encontrada', 'danger')
@@ -505,11 +573,9 @@ def editar_factura_proveedor(id):
     descripcion = request.form.get('descripcion', '').strip()
 
     archivo = f['archivo']
-    # Manejar reemplazo de archivo
     if 'archivo' in request.files:
         file = request.files['archivo']
         if file and file.filename != '' and allowed_file(file.filename):
-            # eliminar archivo viejo si existe
             if archivo:
                 old_path = os.path.join(app.config['UPLOAD_FOLDER'], archivo)
                 if os.path.exists(old_path):
@@ -530,8 +596,8 @@ def editar_factura_proveedor(id):
         monto_val = None
 
     try:
-        conn.execute('''UPDATE facturas_proveedores SET numero = ?, fecha = ?, monto = ?, descripcion = ?, archivo = ? WHERE id = ?''',
-                     (numero if numero else None, fecha if fecha else None, monto_val, descripcion if descripcion else None, archivo, id))
+        conn.execute('''UPDATE facturas_proveedores SET numero = ?, fecha = ?, monto = ?, descripcion = ?, archivo = ? WHERE id = ? AND id_usuario = ?''',
+                     (numero if numero else None, fecha if fecha else None, monto_val, descripcion if descripcion else None, archivo, id, user_id))
         conn.commit()
         flash('Factura actualizada correctamente', 'success')
     except Exception as e:
@@ -550,9 +616,10 @@ def eliminar_proveedor(id):
         flash("Debes iniciar sesión para acceder.", "warning")
         return redirect(url_for("login"))
 
+    user_id = get_current_user_id()
     conn = get_db_connection()
     try:
-        conn.execute("DELETE FROM proveedores WHERE id = ?", (id,))
+        conn.execute("DELETE FROM proveedores WHERE id = ? AND id_usuario = ?", (id, user_id))
         conn.commit()
         flash("Proveedor eliminado correctamente", "danger")
     except Exception as e:
@@ -572,22 +639,32 @@ def eliminar_proveedor(id):
 
 @app.route('/dashboard/clientes', methods=['GET'])
 def gestion_clientes():
+    if "user" not in session:
+        flash("Debes iniciar sesión para acceder.", "warning")
+        return redirect(url_for("login"))
+
+    user_id = get_current_user_id()
     conn = get_db_connection()
-    clientes = conn.execute('SELECT * FROM clientes').fetchall()
+    clientes = conn.execute('SELECT * FROM clientes WHERE id_usuario = ? ORDER BY nombre', (user_id,)).fetchall()
     conn.close()
     return render_template('gestion_clientes.html', clientes=clientes)
 
 @app.route('/dashboard/clientes/agregar_clientes', methods=['GET', 'POST'])
 def agregar_clientes():
+    if "user" not in session:
+        flash("Debes iniciar sesión para acceder.", "warning")
+        return redirect(url_for("login"))
+
     if request.method == 'POST':
+        user_id = get_current_user_id()
         nombre = request.form['nombre']
         email = request.form['email']
         telefono = request.form['telefono']
         direccion = request.form['direccion']
 
         conn = get_db_connection()
-        conn.execute('INSERT INTO clientes (nombre, email, telefono, direccion) VALUES (?, ?, ?, ?)',
-                     (nombre, email, telefono, direccion))
+        conn.execute('INSERT INTO clientes (nombre, email, telefono, direccion, id_usuario) VALUES (?, ?, ?, ?, ?)',
+                     (nombre, email, telefono, direccion, user_id))
         conn.commit()
         conn.close()
         flash('Cliente agregado exitosamente', 'success')
@@ -596,8 +673,13 @@ def agregar_clientes():
 
 @app.route('/dashboard/clientes/editar/<int:id>', methods=['GET', 'POST'])
 def editar_cliente(id):
+    if "user" not in session:
+        flash("Debes iniciar sesión para acceder.", "warning")
+        return redirect(url_for("login"))
+
+    user_id = get_current_user_id()
     conn = get_db_connection()
-    cliente = conn.execute('SELECT * FROM clientes WHERE id_cliente = ?', (id,)).fetchone()
+    cliente = conn.execute('SELECT * FROM clientes WHERE id_cliente = ? AND id_usuario = ?', (id, user_id)).fetchone()
 
     if request.method == 'POST':
         nombre = request.form['nombre']
@@ -605,9 +687,8 @@ def editar_cliente(id):
         telefono = request.form['telefono']
         direccion = request.form['direccion']
 
-        # Usa 'id_cliente' en la consulta UPDATE
-        conn.execute('UPDATE clientes SET nombre = ?, email = ?, telefono = ?, direccion = ? WHERE id_cliente = ?',
-                     (nombre, email, telefono, direccion, id))
+        conn.execute('UPDATE clientes SET nombre = ?, email = ?, telefono = ?, direccion = ? WHERE id_cliente = ? AND id_usuario = ?',
+                     (nombre, email, telefono, direccion, id, user_id))
         conn.commit()
         conn.close()
         flash('Cliente actualizado exitosamente', 'success')
@@ -619,9 +700,13 @@ def editar_cliente(id):
 # La ruta para eliminar cliente
 @app.route('/clientes/eliminar/<int:id>', methods=['POST'])
 def eliminar_cliente(id):
+    if "user" not in session:
+        flash("Debes iniciar sesión para acceder.", "warning")
+        return redirect(url_for("login"))
+
+    user_id = get_current_user_id()
     conn = get_db_connection()
-    # Usa 'id_cliente' en la consulta SQL
-    conn.execute("DELETE FROM clientes WHERE id_cliente = ?", (id,))
+    conn.execute("DELETE FROM clientes WHERE id_cliente = ? AND id_usuario = ?", (id, user_id))
     conn.commit()
     conn.close()
     flash("Cliente eliminado correctamente", "danger")
@@ -633,8 +718,14 @@ def eliminar_cliente(id):
 
 @app.route('/dashboard/ventas', methods=['GET', 'POST'])
 def ventas():
+    if "user" not in session:
+        flash("Debes iniciar sesión para acceder.", "warning")
+        return redirect(url_for("login"))
+
+    user_id = get_current_user_id()
+
     if request.method == 'POST':
-        id_cliente = request.form.get('id_cliente')  # Puede ser None o vacío
+        id_cliente = request.form.get('id_cliente')
         productos = request.form.getlist('producto[]')
         cantidades = request.form.getlist('cantidad[]')
         metodo_pago = request.form.get('metodo_pago')
@@ -643,22 +734,19 @@ def ventas():
         cursor = conn.cursor()
 
         try:
-            # Crear factura (si no hay cliente, guardamos NULL)
             fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             if id_cliente == "" or id_cliente is None:
-                cursor.execute("INSERT INTO facturas (id_cliente, fecha, total) VALUES (NULL, ?, ?)", (fecha, 0))
+                cursor.execute("INSERT INTO facturas (id_cliente, fecha, total, id_usuario) VALUES (NULL, ?, ?, ?)", (fecha, 0, user_id))
             else:
-                cursor.execute("INSERT INTO facturas (id_cliente, fecha, total) VALUES (?, ?, ?)", (id_cliente, fecha, 0))
+                cursor.execute("INSERT INTO facturas (id_cliente, fecha, total, id_usuario) VALUES (?, ?, ?, ?)", (id_cliente, fecha, 0, user_id))
             id_factura = cursor.lastrowid
-
             total_factura = 0
 
-            # Procesar productos
             for i in range(len(productos)):
                 id_producto = int(productos[i])
                 cantidad = int(cantidades[i])
 
-                producto = cursor.execute("SELECT precio, stock FROM productos WHERE id_producto = ?", (id_producto,)).fetchone()
+                producto = cursor.execute("SELECT precio, stock FROM productos WHERE id_producto = ? AND id_usuario = ?", (id_producto, user_id)).fetchone()
 
                 if not producto:
                     conn.rollback()
@@ -673,18 +761,13 @@ def ventas():
                 precio_unitario = producto['precio']
                 subtotal = precio_unitario * cantidad
                 total_factura += subtotal
-                # Insertar en detalle (incluye metodo_pago)
                 cursor.execute("""INSERT INTO detalle_factura 
-                                  (id_factura, id_producto, cantidad, precio_unitario, subtotal, metodo_pago)
-                                  VALUES (?, ?, ?, ?, ?, ?)""",
-                               (id_factura, id_producto, cantidad, precio_unitario, subtotal, metodo_pago))
+                                  (id_factura, id_producto, cantidad, precio_unitario, subtotal, metodo_pago, id_usuario)
+                                  VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                               (id_factura, id_producto, cantidad, precio_unitario, subtotal, metodo_pago, user_id))
+                cursor.execute("UPDATE productos SET stock = stock - ? WHERE id_producto = ? AND id_usuario = ?", (cantidad, id_producto, user_id))
 
-                # Descontar stock
-                cursor.execute("UPDATE productos SET stock = stock - ? WHERE id_producto = ?", (cantidad, id_producto))
-
-            # Actualizar total de factura
-            cursor.execute("UPDATE facturas SET total = ? WHERE id_factura = ?", (total_factura, id_factura))
-
+            cursor.execute("UPDATE facturas SET total = ? WHERE id_factura = ? AND id_usuario = ?", (total_factura, id_factura, user_id))
             conn.commit()
             flash("Venta registrada correctamente.", "success")
         except Exception as e:
@@ -695,57 +778,67 @@ def ventas():
 
         return redirect(url_for('listado_facturas'))
 
-    # Si es GET, cargamos clientes y productos para mostrar en el formulario
     conn = get_db_connection()
-    clientes = conn.execute("SELECT * FROM clientes").fetchall()
-    productos = conn.execute("SELECT * FROM productos WHERE stock > 0").fetchall()
+    clientes = conn.execute("SELECT * FROM clientes WHERE id_usuario = ? ORDER BY nombre", (user_id,)).fetchall()
+    productos = conn.execute("SELECT * FROM productos WHERE id_usuario = ? AND stock > 0 ORDER BY descripcion", (user_id,)).fetchall()
     conn.close()
     return render_template('ventas.html', clientes=clientes, productos=productos)
 
 
 @app.route('/dashboard/listado_facturas', methods=['GET'])
 def listado_facturas():
+    if "user" not in session:
+        flash("Debes iniciar sesión para acceder.", "warning")
+        return redirect(url_for("login"))
+
+    user_id = get_current_user_id()
     conn = get_db_connection()
-    # Calculamos la ganancia por factura: sum(cantidad * (precio_unitario - precio_costo))
     facturas = conn.execute("""
         SELECT f.id_factura,
                f.fecha,
                f.total,
-               (SELECT metodo_pago FROM detalle_factura WHERE id_factura = f.id_factura LIMIT 1) as metodo_pago,
+               (SELECT metodo_pago FROM detalle_factura WHERE id_factura = f.id_factura AND id_usuario = ? LIMIT 1) as metodo_pago,
                c.nombre as cliente,
                IFNULL(SUM(d.cantidad * (d.precio_unitario - p.precio_costo)), 0) as ganancia
         FROM facturas f
-        LEFT JOIN clientes c ON f.id_cliente = c.id_cliente
-        LEFT JOIN detalle_factura d ON d.id_factura = f.id_factura
-        LEFT JOIN productos p ON d.id_producto = p.id_producto
+        LEFT JOIN clientes c ON f.id_cliente = c.id_cliente AND c.id_usuario = ?
+        LEFT JOIN detalle_factura d ON d.id_factura = f.id_factura AND d.id_usuario = ?
+        LEFT JOIN productos p ON d.id_producto = p.id_producto AND p.id_usuario = ?
+        WHERE f.id_usuario = ?
         GROUP BY f.id_factura
         ORDER BY f.fecha DESC
-    """).fetchall()
+    """, (user_id, user_id, user_id, user_id, user_id)).fetchall()
     conn.close()
     return render_template('listado_facturas.html', facturas=facturas)
 
 
 @app.route('/dashboard/factura/<int:id>')
 def detalle_factura(id):
+    if "user" not in session:
+        flash("Debes iniciar sesión para acceder.", "warning")
+        return redirect(url_for("login"))
+
+    user_id = get_current_user_id()
     conn = get_db_connection()
     factura = conn.execute("""SELECT f.id_factura, f.fecha, f.total, c.nombre
                               FROM facturas f
-                              LEFT JOIN clientes c ON f.id_cliente = c.id_cliente
-                              WHERE f.id_factura = ?""", (id,)).fetchone()
+                              LEFT JOIN clientes c ON f.id_cliente = c.id_cliente AND c.id_usuario = ?
+                              WHERE f.id_factura = ? AND f.id_usuario = ?""", (user_id, id, user_id)).fetchone()
     detalles = conn.execute("""SELECT d.cantidad, d.precio_unitario, d.subtotal, p.descripcion, d.metodo_pago
                                FROM detalle_factura d
-                               JOIN productos p ON d.id_producto = p.id_producto
-                               WHERE d.id_factura = ?""", (id,)).fetchall()
+                               JOIN productos p ON d.id_producto = p.id_producto AND p.id_usuario = ?
+                               WHERE d.id_factura = ? AND d.id_usuario = ?""", (user_id, id, user_id)).fetchall()
     conn.close()
     return render_template('detalle_factura.html', factura=factura, detalles=detalles)
 
 
 @app.route('/dashboard/factura/<int:id>/print')
 def print_factura(id):
-    """Vista imprimible de la factura. Parámetros query:
-       - type: 'invoice' (formato factura) o 'receipt' (recibo térmico)
-       - copies: número de copias (int) para la impresión automática
-    """
+    if "user" not in session:
+        flash("Debes iniciar sesión para acceder.", "warning")
+        return redirect(url_for("login"))
+
+    user_id = get_current_user_id()
     tipo = request.args.get('type', 'invoice')
     try:
         copies = int(request.args.get('copies', 1))
@@ -755,12 +848,12 @@ def print_factura(id):
     conn = get_db_connection()
     factura = conn.execute("""SELECT f.id_factura, f.fecha, f.total, c.nombre
                               FROM facturas f
-                              LEFT JOIN clientes c ON f.id_cliente = c.id_cliente
-                              WHERE f.id_factura = ?""", (id,)).fetchone()
+                              LEFT JOIN clientes c ON f.id_cliente = c.id_cliente AND c.id_usuario = ?
+                              WHERE f.id_factura = ? AND f.id_usuario = ?""", (user_id, id, user_id)).fetchone()
     detalles = conn.execute("""SELECT d.cantidad, d.precio_unitario, d.subtotal, p.descripcion, d.metodo_pago
                                FROM detalle_factura d
-                               JOIN productos p ON d.id_producto = p.id_producto
-                               WHERE d.id_factura = ?""", (id,)).fetchall()
+                               JOIN productos p ON d.id_producto = p.id_producto AND p.id_usuario = ?
+                               WHERE d.id_factura = ? AND d.id_usuario = ?""", (user_id, id, user_id)).fetchall()
     conn.close()
 
     if not factura:
@@ -778,9 +871,10 @@ def gestion_productos():
     if "user" not in session:
         flash("Debes iniciar sesión para acceder.", "warning")
         return redirect(url_for("login"))
-    
+
+    user_id = get_current_user_id()
     conn = get_db_connection()
-    productos = conn.execute('SELECT * FROM productos ORDER BY descripcion').fetchall()
+    productos = conn.execute('SELECT * FROM productos WHERE id_usuario = ? ORDER BY descripcion', (user_id,)).fetchall()
     conn.close()
     return render_template('gestion_productos.html', productos=productos)
 
@@ -791,8 +885,9 @@ def gestion_cajas():
         flash("Debes iniciar sesión para acceder.", "warning")
         return redirect(url_for("login"))
 
+    user_id = get_current_user_id()
     conn = get_db_connection()
-    cajas = conn.execute('SELECT * FROM cajas ORDER BY fecha_apertura DESC').fetchall()
+    cajas = conn.execute('SELECT * FROM cajas WHERE id_usuario = ? ORDER BY fecha_apertura DESC', (user_id,)).fetchall()
     conn.close()
     return render_template('gestion_cajas.html', cajas=cajas)
 
@@ -803,6 +898,7 @@ def abrir_caja():
         flash("Debes iniciar sesión para acceder.", "warning")
         return redirect(url_for("login"))
 
+    user_id = get_current_user_id()
     usuario = session.get('user')
     monto_apertura = request.form.get('monto_apertura')
     try:
@@ -814,8 +910,8 @@ def abrir_caja():
 
     conn = get_db_connection()
     try:
-        conn.execute('INSERT INTO cajas (fecha_apertura, usuario, monto_apertura, estado) VALUES (?, ?, ?, ?)',
-                     (fecha_apertura, usuario, monto_apertura, 'abierta'))
+        conn.execute('INSERT INTO cajas (fecha_apertura, usuario, monto_apertura, estado, id_usuario) VALUES (?, ?, ?, ?, ?)',
+                     (fecha_apertura, usuario, monto_apertura, 'abierta', user_id))
         conn.commit()
         flash('Caja abierta exitosamente', 'success')
     except Exception as e:
@@ -832,6 +928,7 @@ def cerrar_caja(id):
         flash("Debes iniciar sesión para acceder.", "warning")
         return redirect(url_for("login"))
 
+    user_id = get_current_user_id()
     monto_cierre = request.form.get('monto_cierre')
     try:
         monto_cierre = float(monto_cierre) if monto_cierre else None
@@ -842,8 +939,8 @@ def cerrar_caja(id):
 
     conn = get_db_connection()
     try:
-        conn.execute('UPDATE cajas SET monto_cierre = ?, fecha_cierre = ?, estado = ? WHERE id_caja = ?',
-                     (monto_cierre, fecha_cierre, 'cerrada', id))
+        conn.execute('UPDATE cajas SET monto_cierre = ?, fecha_cierre = ?, estado = ? WHERE id_caja = ? AND id_usuario = ?',
+                     (monto_cierre, fecha_cierre, 'cerrada', id, user_id))
         conn.commit()
         flash('Caja cerrada correctamente', 'success')
     except Exception as e:
@@ -858,7 +955,8 @@ def agregar_producto():
     if "user" not in session:
         flash("Debes iniciar sesión para acceder.", "warning")
         return redirect(url_for("login"))
-    
+
+    user_id = get_current_user_id()
     descripcion = request.form['descripcion']
     stock = int(request.form['stock'])
     codigo_barras = request.form.get('codigo_barras')
@@ -867,32 +965,28 @@ def agregar_producto():
         if codigo_barras == '':
             codigo_barras = None
 
-    # Campos que pueden o no estar
     precio = request.form.get('precio')
     precio_costo = request.form.get('precio_costo')
     margen_ganancia = request.form.get('margen_ganancia')
 
-    # Normalizar valores numéricos
     precio = float(precio) if precio else None
     precio_costo = float(precio_costo) if precio_costo else None
     margen_ganancia = float(margen_ganancia) if margen_ganancia else None
 
-    # Lógica de cálculo automático
     if precio_costo is not None and margen_ganancia is not None:
         precio = round(precio_costo * (1 + (margen_ganancia / 100)), 2)
 
     conn = get_db_connection()
     try:
-        # Validar duplicados de codigo_barras
         if codigo_barras:
-            exists = conn.execute('SELECT id_producto FROM productos WHERE codigo_barras = ?', (codigo_barras,)).fetchone()
+            exists = conn.execute('SELECT id_producto FROM productos WHERE id_usuario = ? AND codigo_barras = ?', (user_id, codigo_barras)).fetchone()
             if exists:
                 flash('El código de barras ya está registrado en otro producto.', 'danger')
                 conn.close()
                 return redirect(url_for('gestion_productos'))
         conn.execute(
-            'INSERT INTO productos (descripcion, precio, stock, precio_costo, margen_ganancia, codigo_barras) VALUES (?, ?, ?, ?, ?, ?)',
-            (descripcion, precio, stock, precio_costo, margen_ganancia, codigo_barras)
+            'INSERT INTO productos (descripcion, precio, stock, precio_costo, margen_ganancia, codigo_barras, id_usuario) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            (descripcion, precio, stock, precio_costo, margen_ganancia, codigo_barras, user_id)
         )
         conn.commit()
         flash('Producto agregado exitosamente', 'success')
@@ -901,7 +995,7 @@ def agregar_producto():
         flash(f'Error al agregar producto: {str(e)}', 'danger')
     finally:
         conn.close()
-    
+
     return redirect(url_for('gestion_productos'))
 
 @app.route('/productos/editar/<int:id>', methods=['POST'])
@@ -909,7 +1003,8 @@ def editar_producto(id):
     if "user" not in session:
         flash("Debes iniciar sesión para acceder.", "warning")
         return redirect(url_for("login"))
-    
+
+    user_id = get_current_user_id()
     descripcion = request.form['descripcion']
     stock = int(request.form['stock'])
     codigo_barras = request.form.get('codigo_barras')
@@ -926,21 +1021,19 @@ def editar_producto(id):
     precio_costo = float(precio_costo) if precio_costo else None
     margen_ganancia = float(margen_ganancia) if margen_ganancia else None
 
-    # Si tiene costo + margen, recalculamos precio
     if precio_costo is not None and margen_ganancia is not None:
         precio = round(precio_costo * (1 + (margen_ganancia / 100)), 2)
 
     conn = get_db_connection()
     try:
-        # Validar duplicados: otro producto con el mismo codigo_barras
         if codigo_barras:
-            exists = conn.execute('SELECT id_producto FROM productos WHERE codigo_barras = ? AND id_producto != ?', (codigo_barras, id)).fetchone()
+            exists = conn.execute('SELECT id_producto FROM productos WHERE id_usuario = ? AND codigo_barras = ? AND id_producto != ?', (user_id, codigo_barras, id)).fetchone()
             if exists:
                 flash('El código de barras ya está registrado en otro producto.', 'danger')
                 conn.close()
                 return redirect(url_for('gestion_productos'))
-        conn.execute('UPDATE productos SET descripcion = ?, precio = ?, stock = ?, precio_costo = ?, margen_ganancia = ?, codigo_barras = ? WHERE id_producto = ?',
-                     (descripcion, precio, stock, precio_costo, margen_ganancia, codigo_barras, id))
+        conn.execute('UPDATE productos SET descripcion = ?, precio = ?, stock = ?, precio_costo = ?, margen_ganancia = ?, codigo_barras = ? WHERE id_producto = ? AND id_usuario = ?',
+                     (descripcion, precio, stock, precio_costo, margen_ganancia, codigo_barras, id, user_id))
         conn.commit()
         flash('Producto actualizado exitosamente', 'success')
     except Exception as e:
@@ -950,19 +1043,21 @@ def editar_producto(id):
     
     return redirect(url_for('gestion_productos'))
 
+
 @app.route('/productos/eliminar/<int:id>', methods=['POST'])
 def eliminar_producto(id):
     if "user" not in session:
         flash("Debes iniciar sesión para acceder.", "warning")
         return redirect(url_for("login"))
-    
+
+    user_id = get_current_user_id()
     conn = get_db_connection()
     try:
-        conn.execute("DELETE FROM productos WHERE id_producto = ?", (id,))
+        conn.execute("DELETE FROM productos WHERE id_producto = ? AND id_usuario = ?", (id, user_id))
         conn.commit()
         flash("Producto eliminado correctamente", "success")
     except Exception as e:
-        flash(f"Error al eliminar producto: {str(e)}", "danger")
+        flash(f'Error al eliminar producto: {str(e)}', 'danger')
     finally:
         conn.close()
     
